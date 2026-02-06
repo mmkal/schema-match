@@ -1,138 +1,233 @@
 import {bench, describe} from 'vitest'
-import {match as arkMatch} from 'arktype'
-import {match as tsPatternMatch} from 'ts-pattern'
+import {P, match as tsPatternMatch} from 'ts-pattern'
+import * as v from 'valibot'
+import {z as zm} from 'zod/mini'
+import {z} from 'zod'
 
 import {match as schemaMatch} from '../../src/index.js'
-import {makeSchema} from '../helpers/standard-schema.js'
 
-const S31 = makeSchema<31>((value): value is 31 => value === 31)
-const S32 = makeSchema<32>((value): value is 32 => value === 32)
-const S33 = makeSchema<33>((value): value is 33 => value === 33)
+type Data =
+  | {type: 'text'; content: string}
+  | {type: 'img'; src: string}
 
-const S0 = makeSchema<0n>((value): value is 0n => value === 0n)
-const S1 = makeSchema<1n>((value): value is 1n => value === 1n)
-const S2 = makeSchema<2n>((value): value is 2n => value === 2n)
-const S3 = makeSchema<3n>((value): value is 3n => value === 3n)
-const S4 = makeSchema<4n>((value): value is 4n => value === 4n)
-const S5 = makeSchema<5n>((value): value is 5n => value === 5n)
-const S6 = makeSchema<6n>((value): value is 6n => value === 6n)
-const S7 = makeSchema<7n>((value): value is 7n => value === 7n)
-const S8 = makeSchema<8n>((value): value is 8n => value === 8n)
-const S9 = makeSchema<9n>((value): value is 9n => value === 9n)
+type Result =
+  | {type: 'ok'; data: Data}
+  | {type: 'error'; error: Error}
 
-const schemaMatch3 = (n: 31 | 32 | 33) =>
-  schemaMatch(n)
-    .with(S31, n => `${n}`)
-    .with(S32, n => `${n}`)
-    .with(S33, n => `${n}`)
+const ZodError = z.object({type: z.literal('error'), error: z.instanceof(Error)})
+const ZodOkText = z.object({
+  type: z.literal('ok'),
+  data: z.object({type: z.literal('text'), content: z.string()}),
+})
+const ZodOkImg = z.object({
+  type: z.literal('ok'),
+  data: z.object({type: z.literal('img'), src: z.string()}),
+})
+
+const ZodMiniError = zm.object({type: zm.literal('error'), error: zm.instanceof(Error)})
+const ZodMiniOkText = zm.object({
+  type: zm.literal('ok'),
+  data: zm.object({type: zm.literal('text'), content: zm.string()}),
+})
+const ZodMiniOkImg = zm.object({
+  type: zm.literal('ok'),
+  data: zm.object({type: zm.literal('img'), src: zm.string()}),
+})
+
+const ValibotError = v.object({type: v.literal('error'), error: v.instance(Error)})
+const ValibotOkText = v.object({
+  type: v.literal('ok'),
+  data: v.object({type: v.literal('text'), content: v.string()}),
+})
+const ValibotOkImg = v.object({
+  type: v.literal('ok'),
+  data: v.object({type: v.literal('img'), src: v.string()}),
+})
+
+const resultText: Result = {type: 'ok', data: {type: 'text', content: 'hello'}}
+const resultImg: Result = {type: 'ok', data: {type: 'img', src: '/hero.png'}}
+const resultError: Result = {type: 'error', error: new Error('boom')}
+
+const schemaMatchZodResult = (result: Result) =>
+  schemaMatch(result)
+    .with(ZodError, () => 'error')
+    .with(ZodOkText, ({data}) => data.content)
+    .with(ZodOkImg, ({data}) => data.src)
     .exhaustive()
 
-const tsPattern3 = (n: 31 | 32 | 33) =>
-  tsPatternMatch(n)
-    .with(31, n => `${n}`)
-    .with(32, n => `${n}`)
-    .with(33, n => `${n}`)
+const schemaMatchValibotResult = (result: Result) =>
+  schemaMatch(result)
+    .with(ValibotError, () => 'error')
+    .with(ValibotOkText, ({data}) => data.content)
+    .with(ValibotOkImg, ({data}) => data.src)
     .exhaustive()
 
-const ark3 = arkMatch
-  .case('31', n => `${n}`)
-  .case('32', n => `${n}`)
-  .case('33', n => `${n}`)
-  .default('assert')
-
-const schemaMatch10 = (n: 0n | 1n | 2n | 3n | 4n | 5n | 6n | 7n | 8n | 9n) =>
-  schemaMatch(n)
-    .with(S0, n => `${n}`)
-    .with(S1, n => `${n}`)
-    .with(S2, n => `${n}`)
-    .with(S3, n => `${n}`)
-    .with(S4, n => `${n}`)
-    .with(S5, n => `${n}`)
-    .with(S6, n => `${n}`)
-    .with(S7, n => `${n}`)
-    .with(S8, n => `${n}`)
-    .with(S9, n => `${n}`)
+const schemaMatchZodMiniResult = (result: Result) =>
+  schemaMatch(result)
+    .with(ZodMiniError, () => 'error')
+    .with(ZodMiniOkText, ({data}) => data.content)
+    .with(ZodMiniOkImg, ({data}) => data.src)
     .exhaustive()
 
-const tsPattern10 = (n: 0n | 1n | 2n | 3n | 4n | 5n | 6n | 7n | 8n | 9n) =>
-  tsPatternMatch(n)
-    .with(0n, n => `${n}`)
-    .with(1n, n => `${n}`)
-    .with(2n, n => `${n}`)
-    .with(3n, n => `${n}`)
-    .with(4n, n => `${n}`)
-    .with(5n, n => `${n}`)
-    .with(6n, n => `${n}`)
-    .with(7n, n => `${n}`)
-    .with(8n, n => `${n}`)
-    .with(9n, n => `${n}`)
+const tsPatternResult = (result: Result) =>
+  tsPatternMatch(result)
+    .with({type: 'error'}, () => 'error')
+    .with({type: 'ok', data: {type: 'text'}}, ({data}) => data.content)
+    .with({type: 'ok', data: {type: 'img'}}, ({data}) => data.src)
     .exhaustive()
 
-const ark10 = arkMatch
-  .case('0n', n => `${n}`)
-  .case('1n', n => `${n}`)
-  .case('2n', n => `${n}`)
-  .case('3n', n => `${n}`)
-  .case('4n', n => `${n}`)
-  .case('5n', n => `${n}`)
-  .case('6n', n => `${n}`)
-  .case('7n', n => `${n}`)
-  .case('8n', n => `${n}`)
-  .case('9n', n => `${n}`)
-  .default('assert')
+type State =
+  | {status: 'idle'}
+  | {status: 'loading'; startTime: number}
+  | {status: 'success'; data: string}
+  | {status: 'error'; error: Error}
 
-describe('match comparison', () => {
-  bench('schema-match case(3, invoke)', () => {
-    schemaMatch3(31)
-    schemaMatch3(32)
-    schemaMatch3(33)
+type Event =
+  | {type: 'fetch'}
+  | {type: 'success'; data: string}
+  | {type: 'error'; error: Error}
+  | {type: 'cancel'}
+
+const ZodIdle = z.object({status: z.literal('idle')})
+const ZodLoading = z.object({status: z.literal('loading'), startTime: z.number()})
+const ZodSuccessState = z.object({status: z.literal('success'), data: z.string()})
+const ZodErrorState = z.object({status: z.literal('error'), error: z.instanceof(Error)})
+
+const ZodFetch = z.object({type: z.literal('fetch')})
+const ZodSuccessEvent = z.object({type: z.literal('success'), data: z.string()})
+const ZodErrorEvent = z.object({type: z.literal('error'), error: z.instanceof(Error)})
+const ZodCancel = z.object({type: z.literal('cancel')})
+
+const ZodLoadingSuccess = z.tuple([ZodLoading, ZodSuccessEvent])
+const ZodLoadingError = z.tuple([ZodLoading, ZodErrorEvent])
+const ZodNotLoadingFetch = z.tuple([z.union([ZodIdle, ZodSuccessState, ZodErrorState]), ZodFetch])
+const ZodLoadingCancel = z.tuple([ZodLoading, ZodCancel])
+
+const ZodMiniIdle = zm.object({status: zm.literal('idle')})
+const ZodMiniLoading = zm.object({status: zm.literal('loading'), startTime: zm.number()})
+const ZodMiniSuccessState = zm.object({status: zm.literal('success'), data: zm.string()})
+const ZodMiniErrorState = zm.object({status: zm.literal('error'), error: zm.instanceof(Error)})
+
+const ZodMiniFetch = zm.object({type: zm.literal('fetch')})
+const ZodMiniSuccessEvent = zm.object({type: zm.literal('success'), data: zm.string()})
+const ZodMiniErrorEvent = zm.object({type: zm.literal('error'), error: zm.instanceof(Error)})
+const ZodMiniCancel = zm.object({type: zm.literal('cancel')})
+
+const ZodMiniLoadingSuccess = zm.tuple([ZodMiniLoading, ZodMiniSuccessEvent])
+const ZodMiniLoadingError = zm.tuple([ZodMiniLoading, ZodMiniErrorEvent])
+const ZodMiniNotLoadingFetch = zm.tuple([
+  zm.union([ZodMiniIdle, ZodMiniSuccessState, ZodMiniErrorState]),
+  ZodMiniFetch,
+])
+const ZodMiniLoadingCancel = zm.tuple([ZodMiniLoading, ZodMiniCancel])
+
+const ValibotIdle = v.object({status: v.literal('idle')})
+const ValibotLoading = v.object({status: v.literal('loading'), startTime: v.number()})
+const ValibotSuccessState = v.object({status: v.literal('success'), data: v.string()})
+const ValibotErrorState = v.object({status: v.literal('error'), error: v.instance(Error)})
+
+const ValibotFetch = v.object({type: v.literal('fetch')})
+const ValibotSuccessEvent = v.object({type: v.literal('success'), data: v.string()})
+const ValibotErrorEvent = v.object({type: v.literal('error'), error: v.instance(Error)})
+const ValibotCancel = v.object({type: v.literal('cancel')})
+
+const ValibotLoadingSuccess = v.tuple([ValibotLoading, ValibotSuccessEvent])
+const ValibotLoadingError = v.tuple([ValibotLoading, ValibotErrorEvent])
+const ValibotNotLoadingFetch = v.tuple([
+  v.union([ValibotIdle, ValibotSuccessState, ValibotErrorState]),
+  ValibotFetch,
+])
+const ValibotLoadingCancel = v.tuple([ValibotLoading, ValibotCancel])
+
+const reducerZod = (state: State, event: Event): State =>
+  schemaMatch<[State, Event]>([state, event])
+    .with(ZodLoadingSuccess, ([, e]) => ({status: 'success', data: e.data} as const))
+    .with(ZodLoadingError, ([, e]) => ({status: 'error', error: e.error} as const))
+    .with(ZodNotLoadingFetch, () => ({status: 'loading', startTime: Date.now()} as const))
+    .with(ZodLoadingCancel, () => ({status: 'idle'} as const))
+    .otherwise(() => state)
+
+const reducerValibot = (state: State, event: Event): State =>
+  schemaMatch<[State, Event]>([state, event])
+    .with(ValibotLoadingSuccess, ([, e]) => ({status: 'success', data: e.data} as const))
+    .with(ValibotLoadingError, ([, e]) => ({status: 'error', error: e.error} as const))
+    .with(ValibotNotLoadingFetch, () => ({status: 'loading', startTime: Date.now()} as const))
+    .with(ValibotLoadingCancel, () => ({status: 'idle'} as const))
+    .otherwise(() => state)
+
+const reducerZodMini = (state: State, event: Event): State =>
+  schemaMatch<[State, Event]>([state, event])
+    .with(ZodMiniLoadingSuccess, ([, e]) => ({status: 'success', data: e.data} as const))
+    .with(ZodMiniLoadingError, ([, e]) => ({status: 'error', error: e.error} as const))
+    .with(ZodMiniNotLoadingFetch, () => ({status: 'loading', startTime: Date.now()} as const))
+    .with(ZodMiniLoadingCancel, () => ({status: 'idle'} as const))
+    .otherwise(() => state)
+
+const reducerTsPattern = (state: State, event: Event): State =>
+  tsPatternMatch<[State, Event]>([state, event])
+    .with([{status: 'loading'}, {type: 'success'}], ([, e]) => ({status: 'success', data: e.data} as const))
+    .with([{status: 'loading'}, {type: 'error'}], ([, e]) => ({status: 'error', error: e.error} as const))
+    .with([{status: P.not('loading')}, {type: 'fetch'}], () => ({
+      status: 'loading',
+      startTime: Date.now(),
+    } as const))
+    .with([{status: 'loading'}, {type: 'cancel'}], () => ({status: 'idle'} as const))
+    .otherwise(() => state)
+
+const loadingState: State = {status: 'loading', startTime: 1}
+const successEvent: Event = {type: 'success', data: 'done'}
+const errorEvent: Event = {type: 'error', error: new Error('nope')}
+const idleState: State = {status: 'idle'}
+const fetchEvent: Event = {type: 'fetch'}
+
+describe('result-style docs example', () => {
+  bench('schema-match zod result', () => {
+    schemaMatchZodResult(resultText)
+    schemaMatchZodResult(resultImg)
+    schemaMatchZodResult(resultError)
   })
 
-  bench('arktype case(3, invoke)', () => {
-    ark3(31)
-    ark3(32)
-    ark3(33)
+  bench('schema-match valibot result', () => {
+    schemaMatchValibotResult(resultText)
+    schemaMatchValibotResult(resultImg)
+    schemaMatchValibotResult(resultError)
   })
 
-  bench('ts-pattern case(3, invoke)', () => {
-    tsPattern3(31)
-    tsPattern3(32)
-    tsPattern3(33)
+  bench('schema-match zod-mini result', () => {
+    schemaMatchZodMiniResult(resultText)
+    schemaMatchZodMiniResult(resultImg)
+    schemaMatchZodMiniResult(resultError)
   })
 
-  bench('schema-match case(10, invoke first)', () => {
-    schemaMatch10(0n)
-    schemaMatch10(1n)
-    schemaMatch10(2n)
+  bench('ts-pattern result', () => {
+    tsPatternResult(resultText)
+    tsPatternResult(resultImg)
+    tsPatternResult(resultError)
+  })
+})
+
+describe('reducer-style docs example', () => {
+  bench('schema-match zod reducer', () => {
+    reducerZod(loadingState, successEvent)
+    reducerZod(loadingState, errorEvent)
+    reducerZod(idleState, fetchEvent)
   })
 
-  bench('arktype case(10, invoke first)', () => {
-    ark10(0n)
-    ark10(1n)
-    ark10(2n)
+  bench('schema-match valibot reducer', () => {
+    reducerValibot(loadingState, successEvent)
+    reducerValibot(loadingState, errorEvent)
+    reducerValibot(idleState, fetchEvent)
   })
 
-  bench('ts-pattern case(10, invoke first)', () => {
-    tsPattern10(0n)
-    tsPattern10(1n)
-    tsPattern10(2n)
+  bench('schema-match zod-mini reducer', () => {
+    reducerZodMini(loadingState, successEvent)
+    reducerZodMini(loadingState, errorEvent)
+    reducerZodMini(idleState, fetchEvent)
   })
 
-  bench('schema-match case(10, invoke last)', () => {
-    schemaMatch10(7n)
-    schemaMatch10(8n)
-    schemaMatch10(9n)
-  })
-
-  bench('arktype case(10, invoke last)', () => {
-    ark10(7n)
-    ark10(8n)
-    ark10(9n)
-  })
-
-  bench('ts-pattern case(10, invoke last)', () => {
-    tsPattern10(7n)
-    tsPattern10(8n)
-    tsPattern10(9n)
+  bench('ts-pattern reducer', () => {
+    reducerTsPattern(loadingState, successEvent)
+    reducerTsPattern(loadingState, errorEvent)
+    reducerTsPattern(idleState, fetchEvent)
   })
 })

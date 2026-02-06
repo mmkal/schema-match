@@ -1,5 +1,6 @@
 import type {StandardSchemaV1} from './standard-schema/contract.js'
-import {assertStandardSchema, isSuccess, validateAsync, validateSync} from './standard-schema/validation.js'
+import {ASYNC_REQUIRED, NO_MATCH, matchSchemaAsync, matchSchemaSync} from './standard-schema/compiled.js'
+import {assertStandardSchema} from './standard-schema/validation.js'
 import type {InferOutput} from './types.js'
 
 export function isMatching<const schema extends StandardSchemaV1>(
@@ -34,13 +35,11 @@ export function isMatchingAsync<const schema extends StandardSchemaV1>(
   assertStandardSchema(schema)
   if (arguments.length === 1) {
     return async (next: unknown) => {
-      const result = await validateAsync(schema, next)
-      return isSuccess(result)
+      return (await matchSchemaAsync(schema, next)) !== NO_MATCH
     }
   }
   return (async () => {
-    const result = await validateAsync(schema, value)
-    return isSuccess(result)
+    return (await matchSchemaAsync(schema, value)) !== NO_MATCH
   })()
 }
 
@@ -48,6 +47,9 @@ const isMatchingValue = <schema extends StandardSchemaV1>(
   schema: schema,
   value: unknown
 ): value is InferOutput<schema> => {
-  const result = validateSync(schema, value)
-  return isSuccess(result)
+  const result = matchSchemaSync(schema, value)
+  if (result === ASYNC_REQUIRED) {
+    throw new Error('Schema validation returned a Promise. Use isMatchingAsync instead.')
+  }
+  return result !== NO_MATCH
 }
