@@ -1,4 +1,4 @@
-import {StandardSchemaV1} from './standard-schema/contract.js'
+import type {StandardSchemaV1} from './standard-schema/contract.js'
 import {assertStandardSchema, isSuccess, validateAsync, validateSync} from './standard-schema/validation.js'
 import type {InferOutput} from './types.js'
 

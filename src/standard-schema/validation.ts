@@ -1,7 +1,7 @@
-import {StandardSchemaV1} from './contract.js'
+import type {StandardSchemaV1} from './contract.js'
 import {looksLikeStandardSchema, looksLikeStandardSchemaFailure} from './utils.js'
 
-export const assertStandardSchema = (schema: unknown): asserts schema is StandardSchemaV1 => {
+export function assertStandardSchema(schema: unknown): asserts schema is StandardSchemaV1 {
   if (!looksLikeStandardSchema(schema)) {
     throw new TypeError('Expected a Standard Schema value with a `~standard` property.')
   }

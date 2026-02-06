@@ -1,4 +1,4 @@
-import {StandardSchemaV1} from './standard-schema/contract.js'
+import type {StandardSchemaV1} from './standard-schema/contract.js'
 
 export type StandardSchema = StandardSchemaV1
 

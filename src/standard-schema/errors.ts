@@ -1,4 +1,4 @@
-import {StandardSchemaV1} from './contract.js'
+import type {StandardSchemaV1} from './contract.js'
 import {looksLikeStandardSchemaFailure} from './utils.js'
 
 export const prettifyStandardSchemaError = (error: unknown): string | null => {
@@ -49,8 +49,8 @@ export function toDotPath(path: (string | number | symbol)[]): string {
 
 export class StandardSchemaV1Error extends Error implements StandardSchemaV1.FailureResult {
   issues: StandardSchemaV1.FailureResult['issues']
-  constructor(failure: StandardSchemaV1.FailureResult, options?: {cause?: Error}) {
-    super('Standard Schema error - details in `issues`.', options)
+  constructor(failure: StandardSchemaV1.FailureResult) {
+    super('Standard Schema error - details in `issues`.')
     this.issues = failure.issues
   }
 }

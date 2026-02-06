@@ -1,4 +1,4 @@
-import {StandardSchemaV1} from './standard-schema/contract.js'
+import type {StandardSchemaV1} from './standard-schema/contract.js'
 import {looksLikeStandardSchema} from './standard-schema/utils.js'
 import {assertStandardSchema, isPromiseLike, isSuccess, validateAsync, validateSync} from './standard-schema/validation.js'
 import type {InferOutput} from './types.js'
@@ -93,15 +93,15 @@ class MatchExpression<input, output> {
   }
 
   otherwise<result>(handler: (value: input) => result): WithReturn<output, result> {
-    if (this.state.matched) return this.state.value
-    return handler(this.input)
+    if (this.state.matched) return this.state.value as WithReturn<output, result>
+    return handler(this.input) as WithReturn<output, result>
   }
 
-  exhaustive(): output
-  exhaustive<result>(unexpectedValueHandler: (value: input) => result): WithReturn<output, result>
-  exhaustive(unexpectedValueHandler = defaultCatcher): WithReturn<output, any> {
-    if (this.state.matched) return this.state.value
-    return unexpectedValueHandler(this.input)
+  exhaustive<result = never>(
+    unexpectedValueHandler: (value: input) => result = defaultCatcher as (value: input) => result
+  ): WithReturn<output, result> {
+    if (this.state.matched) return this.state.value as WithReturn<output, result>
+    return unexpectedValueHandler(this.input) as WithReturn<output, result>
   }
 
   run(): output {
@@ -187,19 +187,18 @@ class MatchExpressionAsync<input, output> {
     handler: (value: input) => result | Promise<result>
   ): Promise<WithAsyncReturn<output, result>> {
     return this.state.then(async state => {
-      if (state.matched) return state.value
-      return await handler(this.input)
+      if (state.matched) return state.value as WithAsyncReturn<output, result>
+      return (await handler(this.input)) as WithAsyncReturn<output, result>
     })
   }
 
-  exhaustive(): Promise<output>
-  exhaustive<result>(
-    unexpectedValueHandler: (value: input) => result | Promise<result>
-  ): Promise<WithAsyncReturn<output, result>>
-  exhaustive(unexpectedValueHandler = defaultCatcher): Promise<WithAsyncReturn<output, any>> {
+  exhaustive<result = never>(
+    unexpectedValueHandler: (value: input) => result | Promise<result> =
+      defaultCatcher as (value: input) => result | Promise<result>
+  ): Promise<WithAsyncReturn<output, result>> {
     return this.state.then(async state => {
-      if (state.matched) return state.value
-      return await unexpectedValueHandler(this.input)
+      if (state.matched) return state.value as WithAsyncReturn<output, result>
+      return (await unexpectedValueHandler(this.input)) as WithAsyncReturn<output, result>
     })
   }
 
