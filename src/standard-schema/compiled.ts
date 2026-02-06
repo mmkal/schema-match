@@ -87,7 +87,7 @@ const compileLiteralMatcher = (schema: StandardSchemaV1): CompiledMatcher | null
     }
   }
 
-  const zodDef = maybeSchema?._def
+  const zodDef = maybeSchema?._def ?? maybeSchema?.def
   if (zodDef?.type === 'literal' && Array.isArray(zodDef.values) && zodDef.values.length === 1) {
     const literal = zodDef.values[0]
     return {
@@ -135,6 +135,7 @@ const compileZodMatcher = (schema: StandardSchemaV1): CompiledMatcher | null => 
   const zod = (schema as any)._zod
   const run = zod?.run
   if (!zod || typeof run !== 'function') return null
+  const precheck = compileZodLikePrecheck(schema as any)
 
   const syncPayload: {value: unknown; issues: unknown[]} = {value: undefined, issues: []}
   const asyncPayload: {value: unknown; issues: unknown[]} = {value: undefined, issues: []}
@@ -143,6 +144,7 @@ const compileZodMatcher = (schema: StandardSchemaV1): CompiledMatcher | null => 
 
   return {
     sync: value => {
+      if (precheck && !precheck(value)) return NO_MATCH
       syncPayload.value = value
       syncPayload.issues.length = 0
       const result = run.call(schema, syncPayload, syncCtx)
@@ -150,6 +152,7 @@ const compileZodMatcher = (schema: StandardSchemaV1): CompiledMatcher | null => 
       return syncPayload.issues.length === 0 ? result.value : NO_MATCH
     },
     async: async value => {
+      if (precheck && !precheck(value)) return NO_MATCH
       asyncPayload.value = value
       asyncPayload.issues.length = 0
       const result = await run.call(schema, asyncPayload, asyncCtx)
@@ -184,6 +187,82 @@ const compileArktypeMatcher = (schema: StandardSchemaV1): CompiledMatcher | null
       const result = await callable(value)
       return isFailureResult(result) ? NO_MATCH : result
     },
+  }
+}
+
+type ZodLikePrecheck = (value: unknown) => boolean
+
+const compileZodLikePrecheck = (schema: any): ZodLikePrecheck | null => {
+  const def = schema?._def ?? schema?.def
+  if (!def || typeof def !== 'object') return null
+
+  switch (def.type) {
+    case 'literal': {
+      const values = Array.isArray(def.values) ? def.values : []
+      if (values.length !== 1) return null
+      const literal = values[0]
+      return value => Object.is(value, literal)
+    }
+    case 'object': {
+      const shape = typeof def.shape === 'function' ? def.shape() : def.shape
+      if (!shape || typeof shape !== 'object') return isPlainObject
+
+      const checks: Array<[key: string, check: ZodLikePrecheck]> = []
+      for (const key in shape) {
+        const check = compileZodLikePrecheck(shape[key])
+        if (check) checks.push([key, check])
+      }
+
+      if (checks.length === 0) return isPlainObject
+
+      return value => {
+        if (!isPlainObject(value)) return false
+        const record = value as Record<string, unknown>
+        for (let index = 0; index < checks.length; index += 1) {
+          const [key, check] = checks[index]
+          if (!check(record[key])) return false
+        }
+        return true
+      }
+    }
+    case 'tuple': {
+      const items = Array.isArray(def.items) ? def.items : []
+      const hasRest = !!def.rest
+      if (items.length === 0 && !hasRest) {
+        return value => Array.isArray(value) && value.length === 0
+      }
+
+      const checks = items.map((item: unknown) => compileZodLikePrecheck(item))
+      return value => {
+        if (!Array.isArray(value)) return false
+        if (value.length < items.length) return false
+        if (!hasRest && value.length > items.length) return false
+        for (let index = 0; index < checks.length; index += 1) {
+          const check = checks[index]
+          if (check && !check(value[index])) return false
+        }
+        return true
+      }
+    }
+    case 'union': {
+      const options = Array.isArray(def.options) ? def.options : []
+      if (options.length === 0) return null
+
+      const checks = options
+        .map((option: unknown) => compileZodLikePrecheck(option))
+        .filter((check: ZodLikePrecheck | null): check is ZodLikePrecheck => check !== null)
+
+      if (checks.length === 0) return null
+
+      return value => {
+        for (let index = 0; index < checks.length; index += 1) {
+          if (checks[index](value)) return true
+        }
+        return false
+      }
+    }
+    default:
+      return null
   }
 }
 

@@ -8,38 +8,34 @@ import type {StandardSchemaV1} from '../../src/index.js'
 
 describe('high-level/basic-usage', () => {
   it('matches standard-schema libraries in order', () => {
-    const String = z.string()
-    const NumberArray = v.array(v.number())
-    const Message = type({msg: 'string'})
-
     const stringResult = match('hello')
-      .with(String, s => `hello ${s.substring(1, 3)}`)
-      .with(NumberArray, arr => `got ${arr.length} numbers`)
-      .with(Message, obj => obj.msg)
+      .with(z.string(), s => `hello ${s.substring(1, 3)}`)
+      .with(v.array(v.number()), arr => `got ${arr.length} numbers`)
+      .with(type({msg: 'string'}), obj => obj.msg)
       .otherwise(() => 'unexpected')
 
     expect(stringResult).toBe('hello el')
 
     const arrayResult = match([1, 2, 3])
-      .with(String, s => `hello ${s.substring(1, 3)}`)
-      .with(NumberArray, arr => `got ${arr.length} numbers`)
-      .with(Message, obj => obj.msg)
+      .with(z.string(), s => `hello ${s.substring(1, 3)}`)
+      .with(v.array(v.number()), arr => `got ${arr.length} numbers`)
+      .with(type({msg: 'string'}), obj => obj.msg)
       .otherwise(() => 'unexpected')
 
     expect(arrayResult).toBe('got 3 numbers')
 
     const objectResult = match({msg: 'yo'})
-      .with(String, s => `hello ${s.substring(1, 3)}`)
-      .with(NumberArray, arr => `got ${arr.length} numbers`)
-      .with(Message, obj => obj.msg)
+      .with(z.string(), s => `hello ${s.substring(1, 3)}`)
+      .with(v.array(v.number()), arr => `got ${arr.length} numbers`)
+      .with(type({msg: 'string'}), obj => obj.msg)
       .otherwise(() => 'unexpected')
 
     expect(objectResult).toBe('yo')
 
     const fallbackResult = match(42)
-      .with(String, s => `hello ${s.substring(1, 3)}`)
-      .with(NumberArray, arr => `got ${arr.length} numbers`)
-      .with(Message, obj => obj.msg)
+      .with(z.string(), s => `hello ${s.substring(1, 3)}`)
+      .with(v.array(v.number()), arr => `got ${arr.length} numbers`)
+      .with(type({msg: 'string'}), obj => obj.msg)
       .otherwise(() => 'unexpected')
 
     expect(fallbackResult).toBe('unexpected')
