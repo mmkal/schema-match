@@ -4,7 +4,7 @@ import {z} from 'zod'
 import {isMatching} from '../../src/index.js'
 
 describe('ported/is-matching', () => {
-  const blogSchema = z.object({
+  const BlogPost = z.object({
     title: z.string(),
     author: z.object({name: z.string(), age: z.number()}),
   })
@@ -15,7 +15,7 @@ describe('ported/is-matching', () => {
       author: {name: 'Gabriel', age: 27},
     }
 
-    const isBlogPost = isMatching(blogSchema)
+    const isBlogPost = isMatching(BlogPost)
 
     if (isBlogPost(something)) {
       expectTypeOf(something).toEqualTypeOf<{
@@ -33,7 +33,7 @@ describe('ported/is-matching', () => {
       author: {name: 'Gabriel', age: 27},
     }
 
-    if (isMatching(blogSchema, something)) {
+    if (isMatching(BlogPost, something)) {
       expectTypeOf(something).toEqualTypeOf<{
         title: string
         author: {name: string; age: number}
@@ -44,6 +44,6 @@ describe('ported/is-matching', () => {
   })
 
   it('returns false when value does not match', () => {
-    expect(isMatching(blogSchema, {title: 'Oops', author: {name: 'Gabriel'}})).toBe(false)
+    expect(isMatching(BlogPost, {title: 'Oops', author: {name: 'Gabriel'}})).toBe(false)
   })
 })

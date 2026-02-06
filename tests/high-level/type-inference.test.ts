@@ -6,10 +6,10 @@ import {makeAsyncSchema} from '../helpers/standard-schema.js'
 
 describe('high-level/type-inference', () => {
   it('infers handler values from schema output', () => {
-    const numberSchema = z.number()
+    const Number = z.number()
 
     const result = match(1)
-      .with(numberSchema, value => {
+      .with(Number, value => {
         expectTypeOf(value).toEqualTypeOf<number>()
         return value
       })
@@ -19,33 +19,33 @@ describe('high-level/type-inference', () => {
   })
 
   it('unions handler return types across branches', () => {
-    const stringSchema = z.string()
-    const numberSchema = z.number()
+    const String = z.string()
+    const Number = z.number()
 
     const result = match<unknown>('hello')
-      .with(stringSchema, value => value.length)
-      .with(numberSchema, value => value + 1)
+      .with(String, value => value.length)
+      .with(Number, value => value + 1)
       .otherwise(() => false)
 
     expectTypeOf(result).toEqualTypeOf<number | boolean>()
   })
 
   it('narrows with isMatching type guards', () => {
-    const stringSchema = z.string()
+    const String = z.string()
     const value: unknown = 'hello'
 
-    if (isMatching(stringSchema, value)) {
+    if (isMatching(String, value)) {
       expectTypeOf(value).toEqualTypeOf<string>()
     }
   })
 
   it('returns promise types for matchAsync', () => {
-    const asyncNumberSchema = makeAsyncSchema<number>(
+    const AsyncNumber = makeAsyncSchema<number>(
       (value): value is number => typeof value === 'number'
     )
 
     const result = matchAsync(2)
-      .with(asyncNumberSchema, value => value + 1)
+      .with(AsyncNumber, value => value + 1)
       .otherwise(() => 0)
 
     expectTypeOf(result).toEqualTypeOf<Promise<number>>()

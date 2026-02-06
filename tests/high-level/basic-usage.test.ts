@@ -8,30 +8,45 @@ import type {StandardSchemaV1} from '../../src/index.js'
 
 describe('high-level/basic-usage', () => {
   it('matches standard-schema libraries in order', () => {
-    const stringSchema = z.string()
-    const numberArraySchema = v.array(v.number())
-    const messageSchema = type({msg: 'string'})
+    const String = z.string()
+    const NumberArray = v.array(v.number())
+    const Message = type({msg: 'string'})
 
-    const cases = [
-      {input: 'hello', expected: 'hello el'},
-      {input: [1, 2, 3], expected: 'got 3 numbers'},
-      {input: {msg: 'yo'}, expected: 'yo'},
-      {input: 42, expected: 'unexpected'},
-    ]
+    const stringResult = match('hello')
+      .with(String, s => `hello ${s.substring(1, 3)}`)
+      .with(NumberArray, arr => `got ${arr.length} numbers`)
+      .with(Message, obj => obj.msg)
+      .otherwise(() => 'unexpected')
 
-    cases.forEach(({input, expected}) => {
-      const result = match(input)
-        .with(stringSchema, s => `hello ${s.substring(1, 3)}`)
-        .with(numberArraySchema, arr => `got ${arr.length} numbers`)
-        .with(messageSchema, obj => obj.msg)
-        .otherwise(() => 'unexpected')
+    expect(stringResult).toBe('hello el')
 
-      expect(result).toBe(expected)
-    })
+    const arrayResult = match([1, 2, 3])
+      .with(String, s => `hello ${s.substring(1, 3)}`)
+      .with(NumberArray, arr => `got ${arr.length} numbers`)
+      .with(Message, obj => obj.msg)
+      .otherwise(() => 'unexpected')
+
+    expect(arrayResult).toBe('got 3 numbers')
+
+    const objectResult = match({msg: 'yo'})
+      .with(String, s => `hello ${s.substring(1, 3)}`)
+      .with(NumberArray, arr => `got ${arr.length} numbers`)
+      .with(Message, obj => obj.msg)
+      .otherwise(() => 'unexpected')
+
+    expect(objectResult).toBe('yo')
+
+    const fallbackResult = match(42)
+      .with(String, s => `hello ${s.substring(1, 3)}`)
+      .with(NumberArray, arr => `got ${arr.length} numbers`)
+      .with(Message, obj => obj.msg)
+      .otherwise(() => 'unexpected')
+
+    expect(fallbackResult).toBe('unexpected')
   })
 
   it('uses schema output values in handlers', () => {
-    const parseNumberSchema: StandardSchemaV1<unknown, number> = {
+    const ParseNumber: StandardSchemaV1<unknown, number> = {
       '~standard': {
         version: 1,
         vendor: 'example',
@@ -43,7 +58,7 @@ describe('high-level/basic-usage', () => {
     }
 
     const result = match('41')
-      .with(parseNumberSchema, value => value + 1)
+      .with(ParseNumber, value => value + 1)
       .otherwise(() => 0)
 
     expect(result).toBe(42)

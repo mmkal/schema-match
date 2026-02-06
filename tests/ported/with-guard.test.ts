@@ -4,12 +4,12 @@ import {match} from '../../src/index.js'
 import {makeSchema} from '../helpers/standard-schema.js'
 
 describe('ported/with-guard', () => {
-  const numberSchema = makeSchema<number>((value): value is number => typeof value === 'number')
+  const Number = makeSchema<number>((value): value is number => typeof value === 'number')
 
   it('uses the guard to refine matches', () => {
     const result = match(12)
-      .with(numberSchema, value => value > 10, () => 'big')
-      .with(numberSchema, () => 'small')
+      .with(Number, value => value > 10, () => 'big')
+      .with(Number, () => 'small')
       .exhaustive()
 
     expect(result).toBe('big')
@@ -17,8 +17,8 @@ describe('ported/with-guard', () => {
 
   it('falls through when guard returns false', () => {
     const result = match(4)
-      .with(numberSchema, value => value > 10, () => 'big')
-      .with(numberSchema, () => 'small')
+      .with(Number, value => value > 10, () => 'big')
+      .with(Number, () => 'small')
       .exhaustive()
 
     expect(result).toBe('small')

@@ -5,11 +5,11 @@ import {makeSchema} from '../helpers/standard-schema.js'
 
 describe('ported/exhaustive', () => {
   it('throws when exhaustive is called without a match', () => {
-    const twoSchema = makeSchema<2>((value): value is 2 => value === 2)
+    const Two = makeSchema<2>((value): value is 2 => value === 2)
 
     expect(() =>
       match(1)
-        .with(twoSchema, () => 'two')
+        .with(Two, () => 'two')
         .exhaustive()
     ).toThrow(NonExhaustiveError)
   })

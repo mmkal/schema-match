@@ -4,22 +4,41 @@ import {match} from '../../src/index.js'
 
 describe('ported/when', () => {
   it('matches when predicate returns truthy', () => {
-    const values = [
-      {value: 1, expected: false},
-      {value: -2, expected: false},
-      {value: 3, expected: false},
-      {value: 20, expected: true},
-      {value: 39, expected: true},
-      {value: 100, expected: false},
-    ]
-
-    values.forEach(({value, expected}) => {
-      const result = match(value)
+    expect(
+      match(1)
         .when(x => x > 10 && x < 50, () => true)
         .otherwise(() => false)
+    ).toBe(false)
 
-      expect(result).toBe(expected)
-    })
+    expect(
+      match(-2)
+        .when(x => x > 10 && x < 50, () => true)
+        .otherwise(() => false)
+    ).toBe(false)
+
+    expect(
+      match(3)
+        .when(x => x > 10 && x < 50, () => true)
+        .otherwise(() => false)
+    ).toBe(false)
+
+    expect(
+      match(20)
+        .when(x => x > 10 && x < 50, () => true)
+        .otherwise(() => false)
+    ).toBe(true)
+
+    expect(
+      match(39)
+        .when(x => x > 10 && x < 50, () => true)
+        .otherwise(() => false)
+    ).toBe(true)
+
+    expect(
+      match(100)
+        .when(x => x > 10 && x < 50, () => true)
+        .otherwise(() => false)
+    ).toBe(false)
   })
 
   it('accepts non-boolean predicate results', () => {

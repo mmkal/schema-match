@@ -5,10 +5,10 @@ import {makeSchema} from '../helpers/standard-schema.js'
 
 describe('ported/otherwise', () => {
   it('passes the input value to otherwise when no schema matches', () => {
-    const neverSchema = makeSchema<never>((_value): _value is never => false)
+    const Never = makeSchema<never>((_value): _value is never => false)
 
     const result = match(42)
-      .with(neverSchema, () => 0)
+      .with(Never, () => 0)
       .otherwise(value => value)
 
     expect(result).toBe(42)
