@@ -52,6 +52,17 @@ MyMatcher({msg: 'yo'})
 
 This avoids rebuilding the fluent chain for hot paths.
 
+You can constrain reusable matcher input types up front:
+
+```ts
+type Result = {type: 'ok'; value: number} | {type: 'err'; message: string}
+
+const TypedMatcher = match
+  .input<Result>()
+  .with(z.object({type: z.literal('ok'), value: z.number()}), ({value}) => value)
+  .otherwise(() => -1)
+```
+
 ## Why use this
 
 - Reuse existing runtime schemas for control flow.

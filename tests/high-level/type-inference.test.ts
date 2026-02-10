@@ -50,4 +50,26 @@ describe('high-level/type-inference', () => {
 
     expectTypeOf(result).toEqualTypeOf<Promise<number>>()
   })
+
+  it('supports constraining input type for reusable matchers', () => {
+    type Input =
+      | {type: 'ok'; value: number}
+      | {type: 'err'; message: string}
+
+    const Ok = z.object({type: z.literal('ok'), value: z.number()})
+
+    const matcher = match
+      .input<Input>()
+      .with(Ok, (value, input) => {
+        expectTypeOf(value).toEqualTypeOf<{type: 'ok'; value: number}>()
+        expectTypeOf(input).toEqualTypeOf<Input>()
+        return value.value
+      })
+      .otherwise(input => {
+        expectTypeOf(input).toEqualTypeOf<Input>()
+        return -1
+      })
+
+    expectTypeOf(matcher).toEqualTypeOf<(input: Input) => number>()
+  })
 })
