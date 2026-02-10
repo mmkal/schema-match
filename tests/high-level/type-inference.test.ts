@@ -72,4 +72,69 @@ describe('high-level/type-inference', () => {
 
     expectTypeOf(matcher).toEqualTypeOf<(input: Input) => number>()
   })
+
+  it('supports constraining output type with .output<T>() on inline match', () => {
+    const Number = z.number()
+
+    const result = match<unknown>('hello')
+      .output<string | number>()
+      .case(Number, value => value + 1)
+      .otherwise(() => 'fallback')
+
+    expectTypeOf(result).toEqualTypeOf<string | number>()
+  })
+
+  it('supports constraining output type with .output<T>() on reusable matchers', () => {
+    type Input =
+      | {type: 'ok'; value: number}
+      | {type: 'err'; message: string}
+
+    const Ok = z.object({type: z.literal('ok'), value: z.number()})
+
+    const matcher = match
+      .input<Input>()
+      .output<number>()
+      .case(Ok, value => value.value)
+      .otherwise(() => -1)
+
+    expectTypeOf(matcher).toEqualTypeOf<(input: Input) => number>()
+  })
+
+  it('supports .output<T>() on the factory without .input<T>()', () => {
+    const Number = z.number()
+
+    const matcher = match
+      .output<number>()
+      .case(Number, value => value + 1)
+      .otherwise(() => -1)
+
+    expectTypeOf(matcher).toEqualTypeOf<(input: unknown) => number>()
+  })
+
+  it('supports .output<T>() on async matchers', () => {
+    const AsyncNumber = makeAsyncSchema<number>(
+      (value): value is number => typeof value === 'number'
+    )
+
+    const result = matchAsync(2)
+      .output<number>()
+      .case(AsyncNumber, value => value + 1)
+      .otherwise(() => 0)
+
+    expectTypeOf(result).toEqualTypeOf<Promise<number>>()
+  })
+
+  it('supports .output<T>() on reusable async matchers', () => {
+    const AsyncNumber = makeAsyncSchema<number>(
+      (value): value is number => typeof value === 'number'
+    )
+
+    const matcher = matchAsync
+      .input<unknown>()
+      .output<number>()
+      .case(AsyncNumber, value => value + 1)
+      .otherwise(() => 0)
+
+    expectTypeOf(matcher).toEqualTypeOf<(input: unknown) => Promise<number>>()
+  })
 })

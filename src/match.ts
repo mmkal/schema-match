@@ -23,6 +23,7 @@ type WithAsyncReturn<current, next> = current extends Unset ? Awaited<next> : cu
 type MatchFactory = {
   <const input, output = Unset>(value: input): MatchExpression<input, output>
   input<input>(): ReusableMatcher<input, Unset>
+  output<output>(): ReusableMatcher<unknown, output>
   case<input, schema extends StandardSchemaV1, result>(
     schema: schema,
     handler: (value: InferOutput<schema>, input: input) => result
@@ -40,6 +41,7 @@ type MatchFactory = {
 type MatchAsyncFactory = {
   <const input, output = Unset>(value: input): MatchExpressionAsync<input, output>
   input<input>(): ReusableMatcherAsync<input, Unset>
+  output<output>(): ReusableMatcherAsync<unknown, output>
   case<input, schema extends StandardSchemaV1, result>(
     schema: schema,
     handler: (value: InferOutput<schema>, input: input) => result | Promise<result>
@@ -62,6 +64,9 @@ export const match = Object.assign(
     input() {
       return new ReusableMatcher<unknown, Unset>(unmatched as MatchState<Unset>)
     },
+    output() {
+      return new ReusableMatcher<unknown, Unset>(unmatched as MatchState<Unset>)
+    },
     'case'(...args: any[]) {
       return (new ReusableMatcher<unknown, Unset>(unmatched as MatchState<Unset>) as any).case(...args)
     },
@@ -74,6 +79,11 @@ export const matchAsync = Object.assign(
   },
   {
     input() {
+      return new ReusableMatcherAsync<unknown, Unset>(
+        Promise.resolve(unmatched as MatchState<Unset>)
+      )
+    },
+    output() {
       return new ReusableMatcherAsync<unknown, Unset>(
         Promise.resolve(unmatched as MatchState<Unset>)
       )
@@ -188,6 +198,10 @@ class MatchExpression<input, output> {
 
   run(): output {
     return this.exhaustive()
+  }
+
+  output<O>(): MatchExpression<input, O> {
+    return this as any
   }
 
   returnType() {
@@ -308,6 +322,10 @@ class MatchExpressionAsync<input, output> {
     return this.exhaustive()
   }
 
+  output<O>(): MatchExpressionAsync<input, O> {
+    return this as any
+  }
+
   returnType() {
     return this
   }
@@ -362,6 +380,10 @@ class ReusableMatcher<input, output> {
     handler: (value: input, input: input) => result
   ): ReusableMatcher<input, WithReturn<output, result>> {
     return new ReusableMatcher(this.terminal, [...this.clauses, {when: predicate, handler}]) as any
+  }
+
+  output<O>(): ReusableMatcher<input, O> {
+    return this as any
   }
 
   otherwise<result>(handler: (value: input) => result): (input: input) => WithReturn<output, result> {
@@ -462,6 +484,10 @@ class ReusableMatcherAsync<input, output> {
     handler: (value: input, input: input) => result | Promise<result>
   ): ReusableMatcherAsync<input, WithAsyncReturn<output, result>> {
     return new ReusableMatcherAsync(this.terminal, [...this.clauses, {when: predicate, handler}]) as any
+  }
+
+  output<O>(): ReusableMatcherAsync<input, O> {
+    return this as any
   }
 
   otherwise<result>(
