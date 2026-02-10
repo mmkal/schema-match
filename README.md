@@ -45,18 +45,16 @@ You can prebuild a matcher once into a function, and reuse it across many inputs
 ```typescript
 import {match} from 'schematch'
 import {z} from 'zod'
-import * as v from 'valibot'
-import {type} from 'arktype'
 
-const MyMatcher = match
+const myMatcher = match
   .case(z.string(), s => `hello ${s.slice(1, 3)}`)
-  .case(v.array(v.number()), arr => `got ${arr.length} numbers`)
-  .case(type({msg: 'string'}), obj => obj.msg)
+  .case(z.array(z.number()), arr => `got ${arr.length} numbers`)
+  .case(z.object({msg: z.string()}), obj => obj.msg)
   .otherwise(() => 'unexpected')
 
-MyMatcher('hello')
-MyMatcher([1, 2, 3])
-MyMatcher({msg: 'yo'})
+myMatcher('hello')
+myMatcher([1, 2, 3])
+myMatcher({msg: 'yo'})
 ```
 
 This avoids rebuilding the fluent chain for hot paths.
