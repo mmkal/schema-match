@@ -135,7 +135,18 @@ const compileZodMatcher = (schema: StandardSchemaV1): CompiledMatcher | null => 
   const zod = (schema as any)._zod
   const run = zod?.run
   if (!zod || typeof run !== 'function') return null
-  const precheck = compileZodLikePrecheck(schema as any)
+  const precheckResult = compileZodLikePrecheck(schema as any)
+  const precheck = precheckResult?.check ?? null
+
+  // When the precheck fully covers the schema (no transforms, pipes, refinements, or unhandled types),
+  // we can skip _zod.run() entirely and just return the input value. This is especially beneficial
+  // for zod-mini which lacks zod's JIT fast path.
+  if (precheckResult?.complete) {
+    return {
+      sync: value => (precheck!(value) ? value : NO_MATCH),
+      async: async value => (precheck!(value) ? value : NO_MATCH),
+    }
+  }
 
   const syncPayload: {value: unknown; issues: unknown[]} = {value: undefined, issues: []}
   const asyncPayload: {value: unknown; issues: unknown[]} = {value: undefined, issues: []}
@@ -192,73 +203,107 @@ const compileArktypeMatcher = (schema: StandardSchemaV1): CompiledMatcher | null
 
 type ZodLikePrecheck = (value: unknown) => boolean
 
-const compileZodLikePrecheck = (schema: any): ZodLikePrecheck | null => {
+type ZodLikePrecheckResult = {
+  check: ZodLikePrecheck
+  /**
+   * When true, the precheck fully validates the schema — no transforms, pipes, refinements,
+   * or unhandled type constraints exist in the schema tree. This means we can skip `_zod.run()`
+   * entirely and just return the original input value when the precheck passes.
+   */
+  complete: boolean
+}
+
+const compileZodLikePrecheck = (schema: any): ZodLikePrecheckResult | null => {
   const def = schema?._def ?? schema?.def
   if (!def || typeof def !== 'object') return null
+
+  // Schemas with checks (e.g. z.string().min(5)) are not fully covered by our precheck
+  const hasChecks = Array.isArray(def.checks) && def.checks.length > 0
 
   switch (def.type) {
     case 'literal': {
       const values = Array.isArray(def.values) ? def.values : []
       if (values.length !== 1) return null
       const literal = values[0]
-      return value => Object.is(value, literal)
+      return {check: value => Object.is(value, literal), complete: !hasChecks}
     }
     case 'object': {
       const shape = typeof def.shape === 'function' ? def.shape() : def.shape
-      if (!shape || typeof shape !== 'object') return isPlainObject
+      if (!shape || typeof shape !== 'object') return {check: isPlainObject, complete: false}
 
       const checks: Array<[key: string, check: ZodLikePrecheck]> = []
-      for (const key in shape) {
-        const check = compileZodLikePrecheck(shape[key])
-        if (check) checks.push([key, check])
+      let allComplete = !hasChecks
+      const shapeKeys = Object.keys(shape)
+      for (const key of shapeKeys) {
+        const result = compileZodLikePrecheck(shape[key])
+        if (result) {
+          checks.push([key, result.check])
+          if (!result.complete) allComplete = false
+        } else {
+          allComplete = false
+        }
       }
 
-      if (checks.length === 0) return isPlainObject
+      if (checks.length === 0) return {check: isPlainObject, complete: false}
 
-      return value => {
-        if (!isPlainObject(value)) return false
-        const record = value as Record<string, unknown>
-        for (let index = 0; index < checks.length; index += 1) {
-          const [key, check] = checks[index]
-          if (!check(record[key])) return false
-        }
-        return true
+      return {
+        check: value => {
+          if (!isPlainObject(value)) return false
+          const record = value as Record<string, unknown>
+          for (let index = 0; index < checks.length; index += 1) {
+            const [key, check] = checks[index]
+            if (!check(record[key])) return false
+          }
+          return true
+        },
+        // Complete only if we compiled checks for ALL shape keys
+        complete: allComplete && checks.length === shapeKeys.length,
       }
     }
     case 'tuple': {
       const items = Array.isArray(def.items) ? def.items : []
       const hasRest = !!def.rest
       if (items.length === 0 && !hasRest) {
-        return value => Array.isArray(value) && value.length === 0
+        return {check: value => Array.isArray(value) && value.length === 0, complete: !hasChecks}
       }
 
-      const checks = items.map((item: unknown) => compileZodLikePrecheck(item))
-      return value => {
-        if (!Array.isArray(value)) return false
-        if (value.length < items.length) return false
-        if (!hasRest && value.length > items.length) return false
-        for (let index = 0; index < checks.length; index += 1) {
-          const check = checks[index]
-          if (check && !check(value[index])) return false
-        }
-        return true
+      const itemResults = items.map((item: unknown) => compileZodLikePrecheck(item))
+      const checks = itemResults.map((r: ZodLikePrecheckResult | null) => r?.check ?? null)
+      const allComplete = !hasChecks && !hasRest && itemResults.every((r: ZodLikePrecheckResult | null) => r?.complete)
+      return {
+        check: value => {
+          if (!Array.isArray(value)) return false
+          if (value.length < items.length) return false
+          if (!hasRest && value.length > items.length) return false
+          for (let index = 0; index < checks.length; index += 1) {
+            const check = checks[index]
+            if (check && !check(value[index])) return false
+          }
+          return true
+        },
+        complete: allComplete,
       }
     }
     case 'union': {
       const options = Array.isArray(def.options) ? def.options : []
       if (options.length === 0) return null
 
-      const checks = options
+      const results = options
         .map((option: unknown) => compileZodLikePrecheck(option))
-        .filter((check: ZodLikePrecheck | null): check is ZodLikePrecheck => check !== null)
+        .filter((r: ZodLikePrecheckResult | null): r is ZodLikePrecheckResult => r !== null)
 
-      if (checks.length === 0) return null
+      if (results.length === 0) return null
 
-      return value => {
-        for (let index = 0; index < checks.length; index += 1) {
-          if (checks[index](value)) return true
-        }
-        return false
+      const checks = results.map((r: ZodLikePrecheckResult) => r.check)
+      return {
+        check: value => {
+          for (let index = 0; index < checks.length; index += 1) {
+            if (checks[index](value)) return true
+          }
+          return false
+        },
+        // Complete only if ALL options were compiled and all are complete
+        complete: results.length === options.length && results.every((r: ZodLikePrecheckResult) => r.complete),
       }
     }
     case 'string':
@@ -267,14 +312,22 @@ const compileZodLikePrecheck = (schema: any): ZodLikePrecheck | null => {
     case 'bigint':
     case 'symbol': {
       const expected = def.type as string
-      return value => typeof value === expected
+      return {check: value => typeof value === expected, complete: !hasChecks}
     }
     case 'null':
-      return value => value === null
+      return {check: value => value === null, complete: !hasChecks}
     case 'undefined':
-      return value => value === undefined
+      return {check: value => value === undefined, complete: !hasChecks}
     case 'date':
-      return value => value instanceof Date
+      return {check: value => value instanceof Date, complete: !hasChecks}
+    case 'custom': {
+      // Covers z.instanceof(SomeClass) — the `fn` is the custom validation function
+      const fn = def.fn
+      if (typeof fn === 'function') {
+        return {check: value => fn(value), complete: !hasChecks}
+      }
+      return null
+    }
     default:
       return null
   }
@@ -286,8 +339,17 @@ const compileValibotMatcher = (schema: StandardSchemaV1): CompiledMatcher | null
   if (typeof run !== 'function') return null
 
   const isAsyncSchema = maybeSchema.async === true
-  const precheck = compileValibotPrecheck(maybeSchema)
+  const precheckResult = compileValibotPrecheck(maybeSchema)
+  const precheck = precheckResult?.check ?? null
   const config = {}
+
+  // When the precheck fully covers the schema, skip ~run entirely
+  if (precheckResult?.complete && !isAsyncSchema) {
+    return {
+      sync: value => (precheck!(value) ? value : NO_MATCH),
+      async: async value => (precheck!(value) ? value : NO_MATCH),
+    }
+  }
 
   return {
     sync: value => {
@@ -309,56 +371,79 @@ const compileValibotMatcher = (schema: StandardSchemaV1): CompiledMatcher | null
 
 type ValibotPrecheck = (value: unknown) => boolean
 
-const compileValibotPrecheck = (schema: any): ValibotPrecheck | null => {
+type ValibotPrecheckResult = {
+  check: ValibotPrecheck
+  complete: boolean
+}
+
+const compileValibotPrecheck = (schema: any): ValibotPrecheckResult | null => {
   if (!schema || typeof schema !== 'object') return null
+
+  // Schemas with pipe (transformations, refinements, etc.) are not fully covered
+  const hasPipe = Array.isArray(schema.pipe) && schema.pipe.length > 0
 
   switch (schema.type) {
     case 'literal': {
       if (!Object.prototype.hasOwnProperty.call(schema, 'literal')) return null
       const literal = schema.literal
-      return value => Object.is(value, literal)
+      return {check: value => Object.is(value, literal), complete: !hasPipe}
     }
     case 'object': {
       const entries = schema.entries
       if (!entries || typeof entries !== 'object') {
-        return isPlainObject
+        return {check: isPlainObject, complete: false}
       }
 
       const checks: Array<[key: string, check: ValibotPrecheck]> = []
-      for (const key in entries) {
-        const check = compileValibotPrecheck(entries[key])
-        if (check) checks.push([key, check])
+      let allComplete = !hasPipe
+      const entryKeys = Object.keys(entries)
+      for (const key of entryKeys) {
+        const result = compileValibotPrecheck(entries[key])
+        if (result) {
+          checks.push([key, result.check])
+          if (!result.complete) allComplete = false
+        } else {
+          allComplete = false
+        }
       }
 
-      if (checks.length === 0) return isPlainObject
+      if (checks.length === 0) return {check: isPlainObject, complete: false}
 
-      return value => {
-        if (!isPlainObject(value)) return false
-        const record = value as Record<string, unknown>
-        for (let index = 0; index < checks.length; index += 1) {
-          const [key, check] = checks[index]
-          if (!check(record[key])) return false
-        }
-        return true
+      return {
+        check: value => {
+          if (!isPlainObject(value)) return false
+          const record = value as Record<string, unknown>
+          for (let index = 0; index < checks.length; index += 1) {
+            const [key, check] = checks[index]
+            if (!check(record[key])) return false
+          }
+          return true
+        },
+        complete: allComplete && checks.length === entryKeys.length,
       }
     }
     case 'tuple': {
       const items = Array.isArray(schema.items) ? schema.items : []
       const hasRest = !!schema.rest
       if (items.length === 0 && !hasRest) {
-        return value => Array.isArray(value) && value.length === 0
+        return {check: value => Array.isArray(value) && value.length === 0, complete: !hasPipe}
       }
 
-      const checks = items.map((item: unknown) => compileValibotPrecheck(item))
-      return value => {
-        if (!Array.isArray(value)) return false
-        if (value.length < items.length) return false
-        if (!hasRest && value.length > items.length) return false
-        for (let index = 0; index < checks.length; index += 1) {
-          const check = checks[index]
-          if (check && !check(value[index])) return false
-        }
-        return true
+      const itemResults = items.map((item: unknown) => compileValibotPrecheck(item))
+      const checks = itemResults.map((r: ValibotPrecheckResult | null) => r?.check ?? null)
+      const allComplete = !hasPipe && !hasRest && itemResults.every((r: ValibotPrecheckResult | null) => r?.complete)
+      return {
+        check: value => {
+          if (!Array.isArray(value)) return false
+          if (value.length < items.length) return false
+          if (!hasRest && value.length > items.length) return false
+          for (let index = 0; index < checks.length; index += 1) {
+            const check = checks[index]
+            if (check && !check(value[index])) return false
+          }
+          return true
+        },
+        complete: allComplete,
       }
     }
     case 'variant': {
@@ -367,39 +452,57 @@ const compileValibotPrecheck = (schema: any): ValibotPrecheck | null => {
       if (typeof key !== 'string' || options.length === 0) return null
 
       const byDiscriminator = new Map<unknown, ValibotPrecheck>()
+      let allComplete = !hasPipe
       for (let index = 0; index < options.length; index += 1) {
         const option = options[index]
         const literal = option?.entries?.[key]?.literal
         if (literal === undefined) continue
-        byDiscriminator.set(literal, compileValibotPrecheck(option) ?? (() => true))
+        const result = compileValibotPrecheck(option)
+        byDiscriminator.set(literal, result?.check ?? (() => true))
+        if (!result?.complete) allComplete = false
       }
 
       if (byDiscriminator.size === 0) return null
 
-      return value => {
-        if (!isPlainObject(value)) return false
-        const record = value as Record<string, unknown>
-        const optionCheck = byDiscriminator.get(record[key])
-        if (!optionCheck) return false
-        return optionCheck(value)
+      return {
+        check: value => {
+          if (!isPlainObject(value)) return false
+          const record = value as Record<string, unknown>
+          const optionCheck = byDiscriminator.get(record[key])
+          if (!optionCheck) return false
+          return optionCheck(value)
+        },
+        complete: allComplete && byDiscriminator.size === options.length,
       }
     }
     case 'union': {
       const options = Array.isArray(schema.options) ? schema.options : []
       if (options.length === 0) return null
 
-      const checks = options
+      const results = options
         .map((option: unknown) => compileValibotPrecheck(option))
-        .filter((check: ValibotPrecheck | null): check is ValibotPrecheck => check !== null)
+        .filter((r: ValibotPrecheckResult | null): r is ValibotPrecheckResult => r !== null)
 
-      if (checks.length === 0) return null
+      if (results.length === 0) return null
 
-      return value => {
-        for (let index = 0; index < checks.length; index += 1) {
-          if (checks[index](value)) return true
-        }
-        return false
+      const checks = results.map((r: ValibotPrecheckResult) => r.check)
+      return {
+        check: value => {
+          for (let index = 0; index < checks.length; index += 1) {
+            if (checks[index](value)) return true
+          }
+          return false
+        },
+        complete: !hasPipe && results.length === options.length && results.every((r: ValibotPrecheckResult) => r.complete),
       }
+    }
+    case 'instance': {
+      // Covers v.instance(SomeClass) — schema.class is the constructor
+      const cls = schema.class
+      if (typeof cls === 'function') {
+        return {check: value => value instanceof cls, complete: !hasPipe}
+      }
+      return null
     }
     case 'string':
     case 'number':
@@ -407,14 +510,14 @@ const compileValibotPrecheck = (schema: any): ValibotPrecheck | null => {
     case 'bigint':
     case 'symbol': {
       const expected = schema.type as string
-      return value => typeof value === expected
+      return {check: value => typeof value === expected, complete: !hasPipe}
     }
     case 'null':
-      return value => value === null
+      return {check: value => value === null, complete: !hasPipe}
     case 'undefined':
-      return value => value === undefined
+      return {check: value => value === undefined, complete: !hasPipe}
     case 'date':
-      return value => value instanceof Date
+      return {check: value => value instanceof Date, complete: !hasPipe}
     default:
       return null
   }

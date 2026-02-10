@@ -12,7 +12,7 @@ pnpm add schema-match
 
 ## Quick start
 
-```ts
+```typescript
 import {match} from 'schema-match'
 import {z} from 'zod'
 
@@ -25,7 +25,7 @@ const output = match(input)
 
 This works with zod, valibot, arktype, and any other standard-schema compatible library. You can even mix and match libraries:
 
-```ts
+```typescript
 import {match} from 'schema-match'
 import {z} from 'zod'
 import * as v from 'valibot'
@@ -42,7 +42,7 @@ const output = match(input)
 
 You can prebuild a matcher once and reuse it across many inputs:
 
-```ts
+```typescript
 import {match} from 'schema-match'
 import {z} from 'zod'
 import * as v from 'valibot'
@@ -63,7 +63,7 @@ This avoids rebuilding the fluent chain for hot paths.
 
 You can constrain reusable matcher input types up front:
 
-```ts
+```typescript
 type Result = {type: 'ok'; value: number} | {type: 'err'; message: string}
 
 const TypedMatcher = match
@@ -91,11 +91,11 @@ Results from a representative run (ops/sec, higher is better):
 
 | Matcher | ops/sec | vs fastest |
 |---|---|---|
-| schema-match arktype | 2,904,965 | fastest |
-| schema-match zod | 1,596,345 | 1.82x slower |
-| schema-match valibot | 1,066,380 | 2.72x slower |
-| schema-match zod-mini | 978,484 | 2.97x slower |
-| ts-pattern | 920,680 | 3.16x slower |
+| schema-match arktype | 2,889,271 | fastest |
+| schema-match zod-mini | 2,459,148 | 1.17x slower |
+| schema-match zod | 2,403,237 | 1.20x slower |
+| schema-match valibot | 2,395,803 | 1.21x slower |
+| ts-pattern | 907,255 | 3.18x slower |
 
 **Reducer-style matching** (4 branches, tuple state+event):
 
@@ -103,11 +103,11 @@ Results from a representative run (ops/sec, higher is better):
 
 | Matcher | ops/sec | vs fastest |
 |---|---|---|
-| schema-match arktype | 2,409,996 | fastest |
-| schema-match zod | 883,887 | 2.73x slower |
-| schema-match valibot | 832,980 | 2.89x slower |
-| schema-match zod-mini | 643,606 | 3.74x slower |
-| ts-pattern | 398,771 | 6.04x slower |
+| schema-match arktype | 2,470,445 | fastest |
+| schema-match zod | 1,896,102 | 1.30x slower |
+| schema-match zod-mini | 1,874,122 | 1.32x slower |
+| schema-match valibot | 1,857,205 | 1.33x slower |
+| ts-pattern | 406,453 | 6.08x slower |
 
 **Inline vs reusable** (result-style):
 
@@ -115,15 +115,15 @@ Results from a representative run (ops/sec, higher is better):
 
 | Matcher | ops/sec | vs fastest |
 |---|---|---|
-| schema-match arktype (reusable) | 3,573,895 | fastest |
-| schema-match arktype (inline) | 2,879,777 | 1.24x slower |
-| schema-match zod (reusable) | 1,728,896 | 2.07x slower |
-| schema-match zod (inline) | 1,565,925 | 2.28x slower |
-| schema-match valibot (reusable) | 1,184,713 | 3.02x slower |
-| schema-match valibot (inline) | 1,077,273 | 3.32x slower |
-| schema-match zod-mini (reusable) | 1,041,923 | 3.43x slower |
-| schema-match zod-mini (inline) | 987,417 | 3.62x slower |
-| ts-pattern | 932,073 | 3.83x slower |
+| schema-match arktype (reusable) | 3,595,131 | fastest |
+| schema-match zod (reusable) | 3,406,267 | 1.06x slower |
+| schema-match zod-mini (reusable) | 3,184,019 | 1.13x slower |
+| schema-match valibot (reusable) | 2,970,570 | 1.21x slower |
+| schema-match arktype (inline) | 2,949,246 | 1.22x slower |
+| schema-match zod (inline) | 2,552,020 | 1.41x slower |
+| schema-match zod-mini (inline) | 2,513,358 | 1.43x slower |
+| schema-match valibot (inline) | 2,490,268 | 1.44x slower |
+| ts-pattern | 924,386 | 3.89x slower |
 
 **Inline vs reusable** (reducer-style):
 
@@ -131,11 +131,11 @@ Results from a representative run (ops/sec, higher is better):
 
 | Matcher | ops/sec | vs fastest |
 |---|---|---|
-| schema-match arktype (reusable) | 3,245,160 | fastest |
-| schema-match arktype (inline) | 2,490,768 | 1.30x slower |
-| schema-match zod (reusable) | 1,034,617 | 3.14x slower |
-| schema-match zod (inline) | 914,339 | 3.55x slower |
-| ts-pattern | 389,377 | 8.33x slower |
+| schema-match arktype (reusable) | 3,152,214 | fastest |
+| schema-match arktype (inline) | 2,557,790 | 1.23x slower |
+| schema-match zod (reusable) | 2,280,499 | 1.38x slower |
+| schema-match zod (inline) | 1,975,361 | 1.60x slower |
+| ts-pattern | 406,866 | 7.75x slower |
 
 **vs arktype native `match`:**
 
@@ -147,10 +147,10 @@ Arktype has its own [`match` API](https://arktype.io/docs/match) that uses set t
 
 | Matcher | ops/sec | vs fastest |
 |---|---|---|
-| arktype native match | 10,163,136 | fastest |
-| schema-match arktype (reusable) | 3,425,517 | 2.97x slower |
-| schema-match zod (reusable) | 2,314,596 | 4.39x slower |
-| ts-pattern | 705,811 | 14.40x slower |
+| arktype native match | 10,390,218 | fastest |
+| schema-match arktype (reusable) | 3,420,320 | 3.04x slower |
+| schema-match zod (reusable) | 2,861,642 | 3.63x slower |
+| ts-pattern | 668,182 | 15.55x slower |
 
 *Nested object matching* (3 branches, discriminated union):
 
@@ -158,10 +158,10 @@ Arktype has its own [`match` API](https://arktype.io/docs/match) that uses set t
 
 | Matcher | ops/sec | vs fastest |
 |---|---|---|
-| schema-match arktype (reusable) | 3,621,461 | fastest |
-| schema-match arktype (inline) | 2,945,928 | 1.23x slower |
-| arktype native .at("type") | 244,828 | 14.79x slower |
-| arktype native .case() | 227,712 | 15.90x slower |
+| schema-match arktype (reusable) | 3,617,913 | fastest |
+| schema-match arktype (inline) | 2,994,844 | 1.21x slower |
+| arktype native .at("type") | 236,615 | 15.29x slower |
+| arktype native .case() | 209,913 | 17.24x slower |
 
 *Nested tuple matching* (4 branches, tuple state+event):
 
@@ -169,9 +169,9 @@ Arktype has its own [`match` API](https://arktype.io/docs/match) that uses set t
 
 | Matcher | ops/sec | vs fastest |
 |---|---|---|
-| schema-match arktype (reusable) | 3,214,693 | fastest |
-| schema-match arktype (inline) | 2,567,581 | 1.25x slower |
-| arktype native .case() | 119,828 | 26.83x slower |
+| schema-match arktype (reusable) | 3,233,544 | fastest |
+| schema-match arktype (inline) | 2,520,186 | 1.28x slower |
+| arktype native .case() | 120,772 | 26.77x slower |
 
 ## Supported ecosystems
 
