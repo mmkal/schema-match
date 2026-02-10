@@ -1,9 +1,22 @@
 {
   "name": "schematch",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Schema-first pattern matching for TypeScript — use zod, valibot, arktype, or any Standard Schema validator as match/case clauses",
-  "main": "index.js",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
   "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "prepare": "pnpm build",
+    "attw": "attw --pack . --ignore-rules cjs-resolves-to-esm no-resolution",
     "test": "vitest run --typecheck",
     "test:watch": "vitest --typecheck"
   },
@@ -33,10 +46,11 @@
   },
   "packageManager": "pnpm@10.28.1",
   "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.2",
     "@types/node": "25.2.2",
     "arktype": "2.1.29",
-    "effect": "^3.19.16",
-    "ts-pattern": "^5.9.0",
+    "effect": "3.19.16",
+    "ts-pattern": "5.9.0",
     "typescript": "5.7.3",
     "valibot": "1.2.0",
     "vitest": "4.0.18",
