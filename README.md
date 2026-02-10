@@ -70,6 +70,25 @@ const TypedMatcher = match
   .otherwise(() => -1)
 ```
 
+Similarly, you can constrain the output type with `.output<T>()`:
+
+```typescript
+const TypedMatcher = match
+  .input<Result>()
+  .output<number>()
+  .case(z.object({type: z.literal('ok'), value: z.number()}), ({value}) => value)
+  .otherwise(() => -1)
+```
+
+This also works on inline matchers:
+
+```typescript
+const output = match(input)
+  .output<string | number>()
+  .case(z.number(), n => n + 1)
+  .otherwise(() => 'fallback')
+```
+
 ## Why use this
 
 - 🔁 Reuse existing runtime schemas for control flow.
@@ -185,6 +204,7 @@ Arktype has its own [`match` API](https://arktype.io/docs/match) that uses set t
 
 Sync matcher builder:
 
+- `.output<T>()` — constrain the return type of the matcher
 - `.case(schema, handler)` — try a schema, run handler if it matches
 - `.case(schema, predicate, handler)` — schema + guard
 - `.case(schemaA, schemaB, ..., handler)` — multiple schemas, first match wins
@@ -195,8 +215,10 @@ Sync matcher builder:
 
 `handler` receives `(parsedValue, input)` where `parsedValue` is schema output.
 
-`match` also has a static builder entrypoint:
+`match` also has static builder entrypoints:
 
+- `match.input<T>()` — constrain the input type for a reusable matcher
+- `match.output<T>()` — constrain the output type for a reusable matcher
 - `match.case(...).case(...).otherwise(...)`
 - `match.case(...).case(...).exhaustive(...)`
 
