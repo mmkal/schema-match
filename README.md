@@ -190,6 +190,80 @@ Arktype has its own [`match` API](https://arktype.io/docs/match) that uses set t
 | schematch arktype (inline) | 2,520,186 | 1.28x slower |
 | arktype native .case() | 120,772 | 26.77x slower |
 
+## How it works
+
+Calling `match(value).case(schema, handler)` or building a reusable matcher looks simple, but under the hood schematch compiles each schema into a specialised matcher the first time it's seen, caches it, and then applies a layered series of fast paths before ever falling back to the schema library's own `validate` call. The layers are described below, roughly in the order they're tried.
+
+### Compiled matcher caching
+
+Every schema object is compiled into a `{ sync, async }` pair of functions exactly once. The compiled matcher is stored directly on the schema object via a well-known symbol (`Symbol.for('schematch.compiled-matcher')`). If the object is frozen or non-extensible, a `WeakMap` fallback is used instead. Subsequent calls with the same schema instance hit one of these caches and skip compilation entirely.
+
+**Tradeoff:** Caching on the schema object itself is the fastest lookup (property access), but mutates the schema. The WeakMap fallback avoids that at the cost of a hash lookup. Both are per-instance, so structurally identical but distinct schema objects compile independently.
+
+### Literal fast path
+
+Before trying any library-specific path, the compiler checks whether the schema represents a single literal value (e.g. `z.literal('ok')`, `v.literal(42)`, `type('ok')`). If so, the compiled matcher is a single `Object.is()` comparison — zero allocation, no validation overhead.
+
+Detection is duck-typed across libraries: arktype's `unit` property, valibot's `type === 'literal'` with a `.literal` field, and zod's `_def.type === 'literal'` with a single-element `values` array.
+
+**Tradeoff:** Relies on internal schema structure rather than a public API. This is fragile across library major versions but turns what would be a full validation call into a single comparison.
+
+### Library-specific compiled matchers
+
+When the literal fast path doesn't apply, the compiler detects which library produced the schema by looking for internal properties (`_zod`, `~run`, `.allows`) and generates a tailored matcher:
+
+**Zod** (`_zod.run`): Calls zod's internal `run` method directly instead of going through `~standard.validate`. Pre-allocates payload (`{value, issues}`) and context (`{async: false}`) objects and reuses them across calls by mutating `.value` and setting `.issues.length = 0`. This avoids allocating new objects on every match attempt.
+
+**Valibot** (`~run`): Similar approach — calls valibot's internal `~run` directly. Pre-allocates a shared `config` object.
+
+**Arktype** (`.allows`): Uses arktype's `.allows(value)` method, which returns a boolean without creating result objects or issue arrays — zero allocation per call. When the schema has no transforms, the input value is returned directly without calling the full validation pipeline.
+
+**Generic fallback**: For any other Standard Schema V1 implementation, calls `~standard.validate` and inspects the result.
+
+**Tradeoff:** Duck-typing library internals provides significant speedups (the zod/valibot paths avoid result object allocation; the arktype path avoids validation entirely for non-transform schemas) but couples schematch to implementation details. A new major version of any library could break detection. The generic fallback ensures correctness regardless.
+
+### Recursive prechecks
+
+For zod and valibot, the compiler recursively walks the schema definition tree and builds a lightweight boolean predicate — a "precheck" — that can reject non-matching values cheaply before invoking the library's validation.
+
+The precheck handles: literals (`Object.is`), primitives (`typeof`), objects (per-key checks), tuples (per-item checks with length bounds), unions (any-of), discriminated unions/variants (Map lookup on discriminator key), `null`/`undefined`/`Date`/`instanceof`.
+
+Each precheck node is classified as **complete** or **partial**:
+
+- **Complete**: The precheck fully covers the schema's type constraint (no transforms, refinements, `.pipe()`, `.checks`, or unhandled schema types in the tree). When a precheck is complete, the library's validation is skipped entirely — the precheck result alone determines match/no-match, and the raw input value is returned.
+- **Partial**: The precheck can fast-reject values that definitely don't match (e.g. wrong `typeof`, missing discriminator) but a passing precheck still requires full validation to confirm. This is the common case for schemas with `.min()`, `.regex()`, `.refine()`, etc.
+
+For valibot's `variant` type (discriminated union), the precheck builds a `Map<discriminatorValue, check>` for O(1) dispatch on the discriminator field, rather than iterating through union options.
+
+**Tradeoff:** Complete prechecks give the biggest speedup (full validation bypass) but return the input value as-is, so they cannot be used with schemas that apply transforms. Partial prechecks still help by avoiding expensive validation calls for obvious mismatches, at the cost of the precheck function call overhead on values that do match. The recursive walk happens once at compile time, not per match.
+
+### Reusable matchers
+
+When you write `match.case(...).case(...).otherwise(...)` (without an input value), schematch builds a `ReusableMatcher` that stores the clause list as a plain array at construction time. The returned function iterates the pre-built array on each call — no `new MatchExpression()`, no fluent chain, no per-call allocation of clause structures. Benchmarks show a ~20-40% throughput increase over inline matching.
+
+**Tradeoff:** The reusable matcher's clause array is allocated once and shared across calls. This is faster but means the matcher is fixed after construction — you can't add branches dynamically.
+
+### Micro-optimisations
+
+A few smaller techniques contribute to throughput:
+
+- **Sentinel symbols** (`NO_MATCH`, `ASYNC_REQUIRED`): Using symbols as return values avoids wrapping match results in `{matched: false}` objects. Control flow is a simple reference equality check.
+- **Early short-circuit**: Once a branch matches, all subsequent `.case()` calls are no-ops (`if (this.matched) return this`).
+- **Singleton unmatched state**: A single frozen `{matched: false, value: undefined}` object is shared across all unmatched branches.
+- **Indexed for-loops**: All inner loops use `for (let i = 0; i < n; i += 1)` rather than `for...of` or `.forEach()`, avoiding iterator protocol overhead.
+- **2-argument fast path**: The common `.case(schema, handler)` call skips guard detection, argument slicing, and inner-loop setup.
+
+### Summary
+
+| Layer | When it helps | What it skips | Cost |
+|---|---|---|---|
+| Compiled matcher cache | Every call after the first | Recompilation | One symbol/WeakMap lookup |
+| Literal fast path | `z.literal()`, `v.literal()`, `type('x')` | All validation | One `Object.is()` call |
+| Library-specific matcher | zod, valibot, arktype schemas | Generic `~standard.validate` | Duck-typing on internals |
+| Complete precheck | Simple schemas (no transforms/refinements) | Library `run()` entirely | Lightweight boolean function |
+| Partial precheck | Any compiled schema | Full validation on mismatches | Precheck call + full validation on match |
+| Reusable matcher | Hot paths with repeated matching | Fluent chain rebuild | Fixed clause array |
+
 ## Supported ecosystems
 
 - `zod`
