@@ -261,6 +261,20 @@ const compileZodLikePrecheck = (schema: any): ZodLikePrecheck | null => {
         return false
       }
     }
+    case 'string':
+    case 'number':
+    case 'boolean':
+    case 'bigint':
+    case 'symbol': {
+      const expected = def.type as string
+      return value => typeof value === expected
+    }
+    case 'null':
+      return value => value === null
+    case 'undefined':
+      return value => value === undefined
+    case 'date':
+      return value => value instanceof Date
     default:
       return null
   }
@@ -387,6 +401,20 @@ const compileValibotPrecheck = (schema: any): ValibotPrecheck | null => {
         return false
       }
     }
+    case 'string':
+    case 'number':
+    case 'boolean':
+    case 'bigint':
+    case 'symbol': {
+      const expected = schema.type as string
+      return value => typeof value === expected
+    }
+    case 'null':
+      return value => value === null
+    case 'undefined':
+      return value => value === undefined
+    case 'date':
+      return value => value instanceof Date
     default:
       return null
   }

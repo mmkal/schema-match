@@ -83,33 +83,95 @@ const TypedMatcher = match
 
 `schema-match` includes compiled matcher caching and library-specific fast paths (literals, object/tuple/union/discriminator prechecks). Reusable matchers avoid rebuilding the fluent chain entirely, giving an additional speedup on hot paths.
 
-Results from a representative run (ops/sec, higher is better) (see the tests being run [here](./tests/bench)):
+Results from a representative run (ops/sec, higher is better):
 
 **Result-style matching** (3 branches, discriminated union):
 
-| Matcher | ops/sec | vs ts-pattern |
+<!-- bench:fullName="tests/bench/match-comparison.bench.ts > result-style docs example" -->
+
+| Matcher | ops/sec | vs fastest |
 |---|---|---|
-| schema-match zod (reusable) | 1,813,322 | **1.95x** faster |
-| schema-match zod (inline) | 1,639,716 | 1.77x faster |
-| schema-match valibot (reusable) | 1,243,341 | 1.34x faster |
-| schema-match valibot (inline) | 1,124,560 | 1.21x faster |
-| schema-match zod-mini (reusable) | 1,110,088 | 1.20x faster |
-| schema-match zod-mini (inline) | 1,010,530 | 1.09x faster |
-| ts-pattern | 927,829 | — |
+| schema-match arktype | 2,904,965 | fastest |
+| schema-match zod | 1,596,345 | 1.82x slower |
+| schema-match valibot | 1,066,380 | 2.72x slower |
+| schema-match zod-mini | 978,484 | 2.97x slower |
+| ts-pattern | 920,680 | 3.16x slower |
 
 **Reducer-style matching** (4 branches, tuple state+event):
 
-| Matcher | ops/sec | vs ts-pattern |
+<!-- bench:fullName="tests/bench/match-comparison.bench.ts > reducer-style docs example" -->
+
+| Matcher | ops/sec | vs fastest |
 |---|---|---|
-| schema-match zod (reusable) | 1,102,223 | **2.66x** faster |
-| schema-match zod (inline) | 977,873 | 2.36x faster |
-| ts-pattern | 415,147 | — |
+| schema-match arktype | 2,409,996 | fastest |
+| schema-match zod | 883,887 | 2.73x slower |
+| schema-match valibot | 832,980 | 2.89x slower |
+| schema-match zod-mini | 643,606 | 3.74x slower |
+| ts-pattern | 398,771 | 6.04x slower |
 
-Run locally:
+**Inline vs reusable** (result-style):
 
-```sh
-pnpm vitest bench --run
-```
+<!-- bench:fullName="tests/bench/reusable-matcher.bench.ts > result matcher (inline vs reusable)" -->
+
+| Matcher | ops/sec | vs fastest |
+|---|---|---|
+| schema-match arktype (reusable) | 3,573,895 | fastest |
+| schema-match arktype (inline) | 2,879,777 | 1.24x slower |
+| schema-match zod (reusable) | 1,728,896 | 2.07x slower |
+| schema-match zod (inline) | 1,565,925 | 2.28x slower |
+| schema-match valibot (reusable) | 1,184,713 | 3.02x slower |
+| schema-match valibot (inline) | 1,077,273 | 3.32x slower |
+| schema-match zod-mini (reusable) | 1,041,923 | 3.43x slower |
+| schema-match zod-mini (inline) | 987,417 | 3.62x slower |
+| ts-pattern | 932,073 | 3.83x slower |
+
+**Inline vs reusable** (reducer-style):
+
+<!-- bench:fullName="tests/bench/reusable-matcher.bench.ts > reducer matcher (inline vs reusable)" -->
+
+| Matcher | ops/sec | vs fastest |
+|---|---|---|
+| schema-match arktype (reusable) | 3,245,160 | fastest |
+| schema-match arktype (inline) | 2,490,768 | 1.30x slower |
+| schema-match zod (reusable) | 1,034,617 | 3.14x slower |
+| schema-match zod (inline) | 914,339 | 3.55x slower |
+| ts-pattern | 389,377 | 8.33x slower |
+
+**vs arktype native `match`:**
+
+Arktype has its own [`match` API](https://arktype.io/docs/match) that uses set theory to skip unmatched branches. For primitive type discrimination, it's the fastest option. For nested object schemas, `schema-match` is faster because it uses arktype's `.allows()` for zero-allocation boolean checks.
+
+*Primitive type discrimination* (`string | number | boolean | null`, `bigint`, `object`):
+
+<!-- bench:fullName="tests/bench/vs-arktype.bench.ts > vs arktype native: primitive type discrimination" -->
+
+| Matcher | ops/sec | vs fastest |
+|---|---|---|
+| arktype native match | 10,163,136 | fastest |
+| schema-match arktype (reusable) | 3,425,517 | 2.97x slower |
+| schema-match zod (reusable) | 2,314,596 | 4.39x slower |
+| ts-pattern | 705,811 | 14.40x slower |
+
+*Nested object matching* (3 branches, discriminated union):
+
+<!-- bench:fullName="tests/bench/vs-arktype.bench.ts > vs arktype native: result matching" -->
+
+| Matcher | ops/sec | vs fastest |
+|---|---|---|
+| schema-match arktype (reusable) | 3,621,461 | fastest |
+| schema-match arktype (inline) | 2,945,928 | 1.23x slower |
+| arktype native .at("type") | 244,828 | 14.79x slower |
+| arktype native .case() | 227,712 | 15.90x slower |
+
+*Nested tuple matching* (4 branches, tuple state+event):
+
+<!-- bench:fullName="tests/bench/vs-arktype.bench.ts > vs arktype native: reducer matching" -->
+
+| Matcher | ops/sec | vs fastest |
+|---|---|---|
+| schema-match arktype (reusable) | 3,214,693 | fastest |
+| schema-match arktype (inline) | 2,567,581 | 1.25x slower |
+| arktype native .case() | 119,828 | 26.83x slower |
 
 ## Supported ecosystems
 

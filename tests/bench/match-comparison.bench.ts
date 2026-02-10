@@ -3,6 +3,7 @@ import {P, match as tsPatternMatch} from 'ts-pattern'
 import * as v from 'valibot'
 import {z as zm} from 'zod/mini'
 import {z} from 'zod'
+import {type} from 'arktype'
 
 import {match as schemaMatch} from '../../src/index.js'
 
@@ -44,6 +45,10 @@ const ValibotOkImg = v.object({
   data: v.object({type: v.literal('img'), src: v.string()}),
 })
 
+const ArkError = type({type: '"error"', error: type.instanceOf(Error)})
+const ArkOkText = type({type: '"ok"', data: {type: '"text"', content: 'string'}})
+const ArkOkImg = type({type: '"ok"', data: {type: '"img"', src: 'string'}})
+
 const resultText: Result = {type: 'ok', data: {type: 'text', content: 'hello'}}
 const resultImg: Result = {type: 'ok', data: {type: 'img', src: '/hero.png'}}
 const resultError: Result = {type: 'error', error: new Error('boom')}
@@ -67,6 +72,13 @@ const schemaMatchZodMiniResult = (result: Result) =>
     .with(ZodMiniError, () => 'error')
     .with(ZodMiniOkText, ({data}) => data.content)
     .with(ZodMiniOkImg, ({data}) => data.src)
+    .exhaustive()
+
+const schemaMatchArktypeResult = (result: Result) =>
+  schemaMatch(result)
+    .with(ArkError, () => 'error')
+    .with(ArkOkText, ({data}) => data.content)
+    .with(ArkOkImg, ({data}) => data.src)
     .exhaustive()
 
 const tsPatternResult = (result: Result) =>
@@ -121,6 +133,21 @@ const ZodMiniNotLoadingFetch = zm.tuple([
 ])
 const ZodMiniLoadingCancel = zm.tuple([ZodMiniLoading, ZodMiniCancel])
 
+const ArkIdle = type({status: '"idle"'})
+const ArkLoading = type({status: '"loading"', startTime: 'number'})
+const ArkSuccessState = type({status: '"success"', data: 'string'})
+const ArkErrorState = type({status: '"error"', error: type.instanceOf(Error)})
+
+const ArkFetch = type({type: '"fetch"'})
+const ArkSuccessEvent = type({type: '"success"', data: 'string'})
+const ArkErrorEvent = type({type: '"error"', error: type.instanceOf(Error)})
+const ArkCancel = type({type: '"cancel"'})
+
+const ArkLoadingSuccess = type([ArkLoading, ArkSuccessEvent])
+const ArkLoadingError = type([ArkLoading, ArkErrorEvent])
+const ArkNotLoadingFetch = type([ArkIdle.or(ArkSuccessState).or(ArkErrorState), ArkFetch])
+const ArkLoadingCancel = type([ArkLoading, ArkCancel])
+
 const ValibotIdle = v.object({status: v.literal('idle')})
 const ValibotLoading = v.object({status: v.literal('loading'), startTime: v.number()})
 const ValibotSuccessState = v.object({status: v.literal('success'), data: v.string()})
@@ -163,6 +190,14 @@ const reducerZodMini = (state: State, event: Event): State =>
     .with(ZodMiniLoadingCancel, () => ({status: 'idle'} as const))
     .otherwise(() => state)
 
+const reducerArktype = (state: State, event: Event): State =>
+  schemaMatch<[State, Event]>([state, event])
+    .with(ArkLoadingSuccess, ([, e]) => ({status: 'success', data: e.data} as const))
+    .with(ArkLoadingError, ([, e]) => ({status: 'error', error: e.error} as const))
+    .with(ArkNotLoadingFetch, () => ({status: 'loading', startTime: Date.now()} as const))
+    .with(ArkLoadingCancel, () => ({status: 'idle'} as const))
+    .otherwise(() => state)
+
 const reducerTsPattern = (state: State, event: Event): State =>
   tsPatternMatch<[State, Event]>([state, event])
     .with([{status: 'loading'}, {type: 'success'}], ([, e]) => ({status: 'success', data: e.data} as const))
@@ -181,25 +216,31 @@ const idleState: State = {status: 'idle'}
 const fetchEvent: Event = {type: 'fetch'}
 
 describe('result-style docs example', () => {
-  bench('schema-match zod result', () => {
+  bench('schema-match zod', () => {
     schemaMatchZodResult(resultText)
     schemaMatchZodResult(resultImg)
     schemaMatchZodResult(resultError)
   })
 
-  bench('schema-match valibot result', () => {
+  bench('schema-match valibot', () => {
     schemaMatchValibotResult(resultText)
     schemaMatchValibotResult(resultImg)
     schemaMatchValibotResult(resultError)
   })
 
-  bench('schema-match zod-mini result', () => {
+  bench('schema-match zod-mini', () => {
     schemaMatchZodMiniResult(resultText)
     schemaMatchZodMiniResult(resultImg)
     schemaMatchZodMiniResult(resultError)
   })
 
-  bench('ts-pattern result', () => {
+  bench('schema-match arktype', () => {
+    schemaMatchArktypeResult(resultText)
+    schemaMatchArktypeResult(resultImg)
+    schemaMatchArktypeResult(resultError)
+  })
+
+  bench('ts-pattern', () => {
     tsPatternResult(resultText)
     tsPatternResult(resultImg)
     tsPatternResult(resultError)
@@ -207,25 +248,31 @@ describe('result-style docs example', () => {
 })
 
 describe('reducer-style docs example', () => {
-  bench('schema-match zod reducer', () => {
+  bench('schema-match zod', () => {
     reducerZod(loadingState, successEvent)
     reducerZod(loadingState, errorEvent)
     reducerZod(idleState, fetchEvent)
   })
 
-  bench('schema-match valibot reducer', () => {
+  bench('schema-match valibot', () => {
     reducerValibot(loadingState, successEvent)
     reducerValibot(loadingState, errorEvent)
     reducerValibot(idleState, fetchEvent)
   })
 
-  bench('schema-match zod-mini reducer', () => {
+  bench('schema-match zod-mini', () => {
     reducerZodMini(loadingState, successEvent)
     reducerZodMini(loadingState, errorEvent)
     reducerZodMini(idleState, fetchEvent)
   })
 
-  bench('ts-pattern reducer', () => {
+  bench('schema-match arktype', () => {
+    reducerArktype(loadingState, successEvent)
+    reducerArktype(loadingState, errorEvent)
+    reducerArktype(idleState, fetchEvent)
+  })
+
+  bench('ts-pattern', () => {
     reducerTsPattern(loadingState, successEvent)
     reducerTsPattern(loadingState, errorEvent)
     reducerTsPattern(idleState, fetchEvent)
