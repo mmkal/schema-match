@@ -217,22 +217,23 @@ const compileZodLikePrecheck = (schema: any): ZodLikePrecheckResult | null => {
   const def = schema?._def ?? schema?.def
   if (!def || typeof def !== 'object') return null
 
-  // Schemas with checks (e.g. z.string().min(5)) are not fully covered by our precheck
+  // Schemas with checks (e.g. z.string().min(5)) or coercion are not fully covered by our precheck
   const hasChecks = Array.isArray(def.checks) && def.checks.length > 0
+  const hasCoerce = !!def.coerce
 
   switch (def.type) {
     case 'literal': {
       const values = Array.isArray(def.values) ? def.values : []
       if (values.length !== 1) return null
       const literal = values[0]
-      return {check: value => Object.is(value, literal), complete: !hasChecks}
+      return {check: value => Object.is(value, literal), complete: !hasChecks && !hasCoerce}
     }
     case 'object': {
       const shape = typeof def.shape === 'function' ? def.shape() : def.shape
       if (!shape || typeof shape !== 'object') return {check: isPlainObject, complete: false}
 
       const checks: Array<[key: string, check: ZodLikePrecheck]> = []
-      let allComplete = !hasChecks
+      let allComplete = !hasChecks && !hasCoerce
       const shapeKeys = Object.keys(shape)
       for (const key of shapeKeys) {
         const result = compileZodLikePrecheck(shape[key])
@@ -264,12 +265,12 @@ const compileZodLikePrecheck = (schema: any): ZodLikePrecheckResult | null => {
       const items = Array.isArray(def.items) ? def.items : []
       const hasRest = !!def.rest
       if (items.length === 0 && !hasRest) {
-        return {check: value => Array.isArray(value) && value.length === 0, complete: !hasChecks}
+        return {check: value => Array.isArray(value) && value.length === 0, complete: !hasChecks && !hasCoerce}
       }
 
       const itemResults = items.map((item: unknown) => compileZodLikePrecheck(item))
       const checks = itemResults.map((r: ZodLikePrecheckResult | null) => r?.check ?? null)
-      const allComplete = !hasChecks && !hasRest && itemResults.every((r: ZodLikePrecheckResult | null) => r?.complete)
+      const allComplete = !hasChecks && !hasCoerce && !hasRest && itemResults.every((r: ZodLikePrecheckResult | null) => r?.complete)
       return {
         check: value => {
           if (!Array.isArray(value)) return false
@@ -303,7 +304,7 @@ const compileZodLikePrecheck = (schema: any): ZodLikePrecheckResult | null => {
           return false
         },
         // Complete only if ALL options were compiled and all are complete
-        complete: results.length === options.length && results.every((r: ZodLikePrecheckResult) => r.complete),
+        complete: !hasChecks && !hasCoerce && results.length === options.length && results.every((r: ZodLikePrecheckResult) => r.complete),
       }
     }
     case 'string':
@@ -311,20 +312,24 @@ const compileZodLikePrecheck = (schema: any): ZodLikePrecheckResult | null => {
     case 'boolean':
     case 'bigint':
     case 'symbol': {
+      // Coerced schemas accept any input type, so a typeof check would be incorrect
+      if (hasCoerce) return null
       const expected = def.type as string
       return {check: value => typeof value === expected, complete: !hasChecks}
     }
     case 'null':
-      return {check: value => value === null, complete: !hasChecks}
+      return {check: value => value === null, complete: !hasChecks && !hasCoerce}
     case 'undefined':
-      return {check: value => value === undefined, complete: !hasChecks}
+      return {check: value => value === undefined, complete: !hasChecks && !hasCoerce}
     case 'date':
+      // Coerced date schemas accept string/number inputs
+      if (hasCoerce) return null
       return {check: value => value instanceof Date, complete: !hasChecks}
     case 'custom': {
       // Covers z.instanceof(SomeClass) — the `fn` is the custom validation function
       const fn = def.fn
       if (typeof fn === 'function') {
-        return {check: value => fn(value), complete: !hasChecks}
+        return {check: value => fn(value), complete: !hasChecks && !hasCoerce}
       }
       return null
     }
@@ -358,13 +363,13 @@ const compileValibotMatcher = (schema: StandardSchemaV1): CompiledMatcher | null
 
       const result = run.call(schema, {value}, config)
       if (isPromiseLike(result)) return ASYNC_REQUIRED
-      return result.typed ? result.value : NO_MATCH
+      return result.typed && !result.issues ? result.value : NO_MATCH
     },
     async: async value => {
       if (precheck && !precheck(value)) return NO_MATCH
 
       const result = await run.call(schema, {value}, config)
-      return result.typed ? result.value : NO_MATCH
+      return result.typed && !result.issues ? result.value : NO_MATCH
     },
   }
 }
@@ -523,9 +528,85 @@ const compileValibotPrecheck = (schema: any): ValibotPrecheckResult | null => {
   }
 }
 
+export type DiscriminatorInfo = {key: string; value: unknown}
+
+/**
+ * Attempts to extract a discriminator (a literal-typed property) from an object schema.
+ * Returns the key name and literal value if found, or null.
+ * Works across zod, valibot, and arktype by inspecting library-specific internals.
+ */
+export const extractDiscriminator = (schema: StandardSchemaV1): DiscriminatorInfo | null => {
+  const s = schema as any
+
+  // Zod / zod-mini: _def.type === 'object', shape has a literal key
+  const zodDef = s?._def ?? s?.def
+  if (zodDef && typeof zodDef === 'object' && zodDef.type === 'object') {
+    const shape = typeof zodDef.shape === 'function' ? zodDef.shape() : zodDef.shape
+    if (shape && typeof shape === 'object') {
+      return findLiteralKeyInZodShape(shape)
+    }
+  }
+
+  // Valibot: schema.type === 'object', entries has a literal key
+  if (s?.type === 'object' && s.entries && typeof s.entries === 'object') {
+    return findLiteralKeyInValibotEntries(s.entries)
+  }
+
+  // Arktype: uses .json for structural inspection
+  const json = s?.json
+  if (json && json.domain === 'object' && Array.isArray(json.required)) {
+    return findLiteralKeyInArktypeJson(json.required)
+  }
+
+  return null
+}
+
+// Common discriminator key names, preferred in this order
+const preferredKeys = ['type', 'kind', 'status', '_tag', 'tag']
+
+const findLiteralKeyInZodShape = (shape: Record<string, any>): DiscriminatorInfo | null => {
+  let fallback: DiscriminatorInfo | null = null
+  for (const key of Object.keys(shape)) {
+    const fieldDef = shape[key]?._def ?? shape[key]?.def
+    if (fieldDef?.type === 'literal' && Array.isArray(fieldDef.values) && fieldDef.values.length === 1) {
+      const info = {key, value: fieldDef.values[0]}
+      if (preferredKeys.includes(key)) return info
+      if (!fallback) fallback = info
+    }
+  }
+  return fallback
+}
+
+const findLiteralKeyInValibotEntries = (entries: Record<string, any>): DiscriminatorInfo | null => {
+  let fallback: DiscriminatorInfo | null = null
+  for (const key of Object.keys(entries)) {
+    if (entries[key]?.type === 'literal' && Object.prototype.hasOwnProperty.call(entries[key], 'literal')) {
+      const info = {key, value: entries[key].literal}
+      if (preferredKeys.includes(key)) return info
+      if (!fallback) fallback = info
+    }
+  }
+  return fallback
+}
+
+const findLiteralKeyInArktypeJson = (required: Array<{key: string; value: any}>): DiscriminatorInfo | null => {
+  let fallback: DiscriminatorInfo | null = null
+  for (let i = 0; i < required.length; i += 1) {
+    const entry = required[i]
+    if (entry.value && typeof entry.value === 'object' && Object.prototype.hasOwnProperty.call(entry.value, 'unit')) {
+      const info = {key: entry.key, value: entry.value.unit}
+      if (preferredKeys.includes(entry.key)) return info
+      if (!fallback) fallback = info
+    }
+  }
+  return fallback
+}
+
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   return !!value && typeof value === 'object' && !Array.isArray(value)
 }
+
+export {isPlainObject}
 
 const isFailureResult = (result: unknown): result is StandardSchemaV1.FailureResult => {
   if (!result || typeof result !== 'object') return false

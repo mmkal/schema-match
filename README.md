@@ -243,6 +243,29 @@ When you write `match.case(...).case(...).otherwise(...)` (without an input valu
 
 **Tradeoff:** The reusable matcher's clause array is allocated once and shared across calls. This is faster but means the matcher is fixed after construction — you can't add branches dynamically.
 
+### Cross-branch discriminator dispatch
+
+When a reusable matcher's `.case()` branches are all object schemas sharing a common literal-typed key (e.g. `type`, `kind`, `status`), schematch automatically builds a dispatch table at construction time. On each match attempt, instead of trying every branch sequentially, it reads the discriminator value from the input and jumps directly to the candidate branch(es).
+
+Discriminator extraction is library-specific:
+
+- **Zod/zod-mini**: Inspects `_def.shape` for keys whose sub-def has `type === 'literal'` with a single value.
+- **Valibot**: Inspects `schema.entries` for keys where `entry.type === 'literal'`.
+- **Arktype**: Inspects `schema.json.required` for entries where `value.unit` exists.
+
+When multiple keys are literal-typed, preferred discriminator names (`type`, `kind`, `status`, `_tag`, `tag`) take priority. Clauses without an extractable discriminator (e.g. `.when()` predicates, non-object schemas) go into a fallback set that's always checked. Original clause ordering is preserved — first-match-wins semantics are maintained.
+
+**Tradeoff:** Only applies to reusable matchers (not inline), only works for object schemas with shared literal keys, and adds a small construction-time cost for schema introspection. For non-discriminated schemas or non-object inputs, the dispatch table is skipped and matching falls back to the linear scan.
+
+### Enhanced exhaustive errors
+
+When `.exhaustive()` throws because no branch matched, the error message now includes:
+
+- **Discriminator info** (reusable matchers): If a dispatch table exists, the error reports the discriminator key, the actual value, and the expected values. For example: `Discriminator 'type' has value "unknown" but expected one of: "ok", "err"`.
+- **Per-schema validation issues**: The error re-validates the input against each candidate schema (or all schemas if no dispatch table exists) and formats the issues. For example: `Case 1: ✖ Expected number → at value`.
+
+Re-validation only happens on the error path, so there is no performance impact on successful matches. The `NonExhaustiveError` object also exposes `.schemas` and `.discriminator` properties for programmatic access.
+
 ### Micro-optimisations
 
 A few smaller techniques contribute to throughput:
@@ -263,6 +286,8 @@ A few smaller techniques contribute to throughput:
 | Complete precheck | Simple schemas (no transforms/refinements) | Library `run()` entirely | Lightweight boolean function |
 | Partial precheck | Any compiled schema | Full validation on mismatches | Precheck call + full validation on match |
 | Reusable matcher | Hot paths with repeated matching | Fluent chain rebuild | Fixed clause array |
+| Discriminator dispatch | Reusable matchers with shared literal key | Non-matching branches | One property read + Map lookup |
+| Enhanced exhaustive errors | `.exhaustive()` failures | — | Re-validation on error path only |
 
 ## Supported ecosystems
 
