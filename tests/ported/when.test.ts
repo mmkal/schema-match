@@ -7,44 +7,44 @@ describe('ported/when', () => {
     expect(
       match(1)
         .when(x => x > 10 && x < 50, () => true)
-        .otherwise(() => false)
+        .default(() => false)
     ).toBe(false)
 
     expect(
       match(-2)
         .when(x => x > 10 && x < 50, () => true)
-        .otherwise(() => false)
+        .default(() => false)
     ).toBe(false)
 
     expect(
       match(3)
         .when(x => x > 10 && x < 50, () => true)
-        .otherwise(() => false)
+        .default(() => false)
     ).toBe(false)
 
     expect(
       match(20)
         .when(x => x > 10 && x < 50, () => true)
-        .otherwise(() => false)
+        .default(() => false)
     ).toBe(true)
 
     expect(
       match(39)
         .when(x => x > 10 && x < 50, () => true)
-        .otherwise(() => false)
+        .default(() => false)
     ).toBe(true)
 
     expect(
       match(100)
         .when(x => x > 10 && x < 50, () => true)
-        .otherwise(() => false)
+        .default(() => false)
     ).toBe(false)
   })
 
   it('accepts non-boolean predicate results', () => {
     const result = match('hello')
       .when(() => 'truthy', () => 'matched')
-      .otherwise(() => 'fallback')
+      .default(() => 'fallback')
 
     expect(result).toBe('matched')
   })

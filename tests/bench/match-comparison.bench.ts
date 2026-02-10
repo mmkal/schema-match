@@ -58,28 +58,28 @@ const schematchZodResult = (result: Result) =>
     .case(ZodError, () => 'error')
     .case(ZodOkText, ({data}) => data.content)
     .case(ZodOkImg, ({data}) => data.src)
-    .exhaustive()
+    .default('assert')
 
 const schematchValibotResult = (result: Result) =>
   schematch(result)
     .case(ValibotError, () => 'error')
     .case(ValibotOkText, ({data}) => data.content)
     .case(ValibotOkImg, ({data}) => data.src)
-    .exhaustive()
+    .default('assert')
 
 const schematchZodMiniResult = (result: Result) =>
   schematch(result)
     .case(ZodMiniError, () => 'error')
     .case(ZodMiniOkText, ({data}) => data.content)
     .case(ZodMiniOkImg, ({data}) => data.src)
-    .exhaustive()
+    .default('assert')
 
 const schematchArktypeResult = (result: Result) =>
   schematch(result)
     .case(ArkError, () => 'error')
     .case(ArkOkText, ({data}) => data.content)
     .case(ArkOkImg, ({data}) => data.src)
-    .exhaustive()
+    .default('assert')
 
 const tsPatternResult = (result: Result) =>
   tsPatternMatch(result)
@@ -172,7 +172,7 @@ const reducerZod = (state: State, event: Event): State =>
     .case(ZodLoadingError, ([, e]) => ({status: 'error', error: e.error} as const))
     .case(ZodNotLoadingFetch, () => ({status: 'loading', startTime: Date.now()} as const))
     .case(ZodLoadingCancel, () => ({status: 'idle'} as const))
-    .otherwise(() => state)
+    .default(() => state)
 
 const reducerValibot = (state: State, event: Event): State =>
   schematch<[State, Event]>([state, event])
@@ -180,7 +180,7 @@ const reducerValibot = (state: State, event: Event): State =>
     .case(ValibotLoadingError, ([, e]) => ({status: 'error', error: e.error} as const))
     .case(ValibotNotLoadingFetch, () => ({status: 'loading', startTime: Date.now()} as const))
     .case(ValibotLoadingCancel, () => ({status: 'idle'} as const))
-    .otherwise(() => state)
+    .default(() => state)
 
 const reducerZodMini = (state: State, event: Event): State =>
   schematch<[State, Event]>([state, event])
@@ -188,7 +188,7 @@ const reducerZodMini = (state: State, event: Event): State =>
     .case(ZodMiniLoadingError, ([, e]) => ({status: 'error', error: e.error} as const))
     .case(ZodMiniNotLoadingFetch, () => ({status: 'loading', startTime: Date.now()} as const))
     .case(ZodMiniLoadingCancel, () => ({status: 'idle'} as const))
-    .otherwise(() => state)
+    .default(() => state)
 
 const reducerArktype = (state: State, event: Event): State =>
   schematch<[State, Event]>([state, event])
@@ -196,7 +196,7 @@ const reducerArktype = (state: State, event: Event): State =>
     .case(ArkLoadingError, ([, e]) => ({status: 'error', error: e.error} as const))
     .case(ArkNotLoadingFetch, () => ({status: 'loading', startTime: Date.now()} as const))
     .case(ArkLoadingCancel, () => ({status: 'idle'} as const))
-    .otherwise(() => state)
+    .default(() => state)
 
 const reducerTsPattern = (state: State, event: Event): State =>
   tsPatternMatch<[State, Event]>([state, event])

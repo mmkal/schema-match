@@ -14,7 +14,7 @@ describe('edge cases', () => {
       const result = match({x: 5})
         .case(broad, () => 'broad')
         .case(narrow, () => 'narrow')
-        .otherwise(() => 'none')
+        .default(() => 'none')
 
       expect(result).toBe('broad')
     })
@@ -26,7 +26,7 @@ describe('edge cases', () => {
       const result = match({x: 5})
         .case(narrow, () => 'narrow')
         .case(broad, () => 'broad')
-        .otherwise(() => 'none')
+        .default(() => 'none')
 
       expect(result).toBe('narrow')
     })
@@ -38,7 +38,7 @@ describe('edge cases', () => {
       const result = match({x: 5})
         .case(broad, () => 'broad')
         .case(narrow, () => 'narrow')
-        .otherwise(() => 'none')
+        .default(() => 'none')
 
       expect(result).toBe('broad')
     })
@@ -50,7 +50,7 @@ describe('edge cases', () => {
       const result = match({x: 5} as {x: number})
         .case(broad, () => 'broad')
         .case(narrow, () => 'narrow')
-        .otherwise(() => 'none')
+        .default(() => 'none')
 
       expect(result).toBe('broad')
     })
@@ -62,7 +62,7 @@ describe('edge cases', () => {
       const m = match
         .case(broad, () => 'broad')
         .case(narrow, () => 'narrow')
-        .otherwise(() => 'none')
+        .default(() => 'none')
 
       expect(m({x: 5})).toBe('broad')
       expect(m({x: 3})).toBe('broad')
@@ -75,7 +75,7 @@ describe('edge cases', () => {
 
       const result = match('hi' as string)
         .case(schema, () => 'matched')
-        .otherwise(() => 'no match')
+        .default(() => 'no match')
 
       expect(result).toBe('no match')
     })
@@ -85,7 +85,7 @@ describe('edge cases', () => {
 
       const result = match(1.5 as number)
         .case(schema, () => 'matched')
-        .otherwise(() => 'no match')
+        .default(() => 'no match')
 
       expect(result).toBe('no match')
     })
@@ -95,7 +95,7 @@ describe('edge cases', () => {
 
       const result = match('not-an-email' as string)
         .case(schema, () => 'matched')
-        .otherwise(() => 'no match')
+        .default(() => 'no match')
 
       expect(result).toBe('no match')
     })
@@ -105,7 +105,7 @@ describe('edge cases', () => {
 
       const result = match('hi' as string)
         .case(schema, () => 'matched')
-        .otherwise(() => 'no match')
+        .default(() => 'no match')
 
       expect(result).toBe('no match')
     })
@@ -115,7 +115,7 @@ describe('edge cases', () => {
 
       const result = match(1.5 as number)
         .case(schema, () => 'matched')
-        .otherwise(() => 'no match')
+        .default(() => 'no match')
 
       expect(result).toBe('no match')
     })
@@ -124,7 +124,7 @@ describe('edge cases', () => {
       const m = match
         .case(z.string().min(5), s => `long: ${s}`)
         .case(z.string(), s => `short: ${s}`)
-        .otherwise(() => 'not a string')
+        .default(() => 'not a string')
 
       expect(m('hello world')).toBe('long: hello world')
       expect(m('hi')).toBe('short: hi')
@@ -138,7 +138,7 @@ describe('edge cases', () => {
 
       const result = match('hello' as string)
         .case(schema, n => n * 2)
-        .otherwise(() => -1)
+        .default(() => -1)
 
       expect(result).toBe(10)
     })
@@ -148,7 +148,7 @@ describe('edge cases', () => {
 
       const result = match('42' as unknown)
         .case(schema, n => n + 1)
-        .otherwise(() => -1)
+        .default(() => -1)
 
       expect(result).toBe(43)
     })
@@ -161,7 +161,7 @@ describe('edge cases', () => {
 
       const result = match('hello' as string)
         .case(schema, n => n * 2)
-        .otherwise(() => -1)
+        .default(() => -1)
 
       expect(result).toBe(10)
     })
@@ -173,7 +173,7 @@ describe('edge cases', () => {
 
       const result = match('hello' as string)
         .case(schema, s => s)
-        .otherwise(() => 'no match')
+        .default(() => 'no match')
 
       expect(result).toBe('HELLO') // must be transformed, not raw 'hello'
     })
@@ -185,7 +185,7 @@ describe('edge cases', () => {
 
       const result = match('hello' as string)
         .case(schema, () => 'matched')
-        .otherwise(() => 'no match')
+        .default(() => 'no match')
 
       expect(result).toBe('no match')
     })
@@ -195,7 +195,7 @@ describe('edge cases', () => {
 
       const result = match('xray' as string)
         .case(schema, () => 'matched')
-        .otherwise(() => 'no match')
+        .default(() => 'no match')
 
       expect(result).toBe('matched')
     })
@@ -208,7 +208,7 @@ describe('edge cases', () => {
 
       const result = match('hello' as string)
         .case(schema, () => 'matched')
-        .otherwise(() => 'no match')
+        .default(() => 'no match')
 
       expect(result).toBe('no match')
     })
@@ -221,7 +221,7 @@ describe('edge cases', () => {
 
       const result = match('xray' as string)
         .case(schema, () => 'matched')
-        .otherwise(() => 'no match')
+        .default(() => 'no match')
 
       expect(result).toBe('matched')
     })
@@ -237,7 +237,7 @@ describe('edge cases', () => {
         .case(schema, val => {
           receivedValue = val
         })
-        .otherwise(() => {})
+        .default(() => {})
 
       // The handler should receive the input value (possibly the same reference
       // when precheck is complete, or a validated copy — both are acceptable).
@@ -253,7 +253,7 @@ describe('edge cases', () => {
         .case(schema, val => {
           receivedValue = val
         })
-        .otherwise(() => {})
+        .default(() => {})
 
       expect(receivedValue).toBe('hello')
     })
@@ -267,7 +267,7 @@ describe('edge cases', () => {
         .case(schema, val => {
           receivedValue = val
         })
-        .otherwise(() => {})
+        .default(() => {})
 
       expect(receivedValue).toEqual({type: 'ok'})
     })
@@ -280,7 +280,7 @@ describe('edge cases', () => {
         .case(schema, val => {
           receivedValue = val
         })
-        .otherwise(() => {})
+        .default(() => {})
 
       expect(receivedValue).toBe('hello')
     })
@@ -294,7 +294,7 @@ describe('edge cases', () => {
       const m = match
         .case(OkSchema, ({value}) => `ok: ${value}`)
         .case(ErrSchema, ({message}) => `err: ${message}`)
-        .otherwise(() => 'unknown')
+        .default(() => 'unknown')
 
       expect(m({type: 'ok', value: 42})).toBe('ok: 42')
       expect(m({type: 'err', message: 'fail'})).toBe('err: fail')
@@ -310,7 +310,7 @@ describe('edge cases', () => {
       const m = match
         .case(OkSchema, ({value}) => `ok: ${value}`)
         .case(ErrSchema, ({message}) => `err: ${message}`)
-        .otherwise(() => 'unknown')
+        .default(() => 'unknown')
 
       expect(m({type: 'ok', value: 42})).toBe('ok: 42')
       expect(m({type: 'err', message: 'fail'})).toBe('err: fail')
@@ -324,7 +324,7 @@ describe('edge cases', () => {
       const m = match
         .case(OkSchema, ({value}) => `ok: ${value}`)
         .case(ErrSchema, ({message}) => `err: ${message}`)
-        .otherwise(() => 'unknown')
+        .default(() => 'unknown')
 
       expect(m({type: 'ok', value: 42})).toBe('ok: 42')
       expect(m({type: 'err', message: 'fail'})).toBe('err: fail')
@@ -338,7 +338,7 @@ describe('edge cases', () => {
       const m = match
         .case(OkSchema, ({value}) => `ok: ${value}`)
         .case(ErrSchema, ({message}) => `err: ${message}`)
-        .otherwise(() => 'unknown')
+        .default(() => 'unknown')
 
       expect(m({type: 'ok', value: 42})).toBe('ok: 42')
       expect(m({type: 'err', message: 'fail'})).toBe('err: fail')
@@ -356,7 +356,7 @@ describe('edge cases', () => {
           (val): val is {type: string} => typeof val === 'object' && val !== null && 'type' in val,
           val => `fallback: ${(val as {type: string}).type}`,
         )
-        .otherwise(() => 'unknown')
+        .default(() => 'unknown')
 
       expect(m({type: 'ok', value: 42})).toBe('ok: 42')
       expect(m({type: 'err', message: 'fail'})).toBe('err: fail')
@@ -373,7 +373,7 @@ describe('edge cases', () => {
       const m = match
         .case(OkSchema, ({value}) => `ok: ${value}`)
         .case(ErrSchema, ({message}) => `err: ${message}`)
-        .otherwise(() => 'fallback')
+        .default(() => 'fallback')
 
       expect(m({type: 'ok', value: 'not a number'})).toBe('fallback')
     })
@@ -386,7 +386,7 @@ describe('edge cases', () => {
       try {
         match({type: 'unknown'})
           .case(OkSchema, () => 'ok')
-          .exhaustive()
+          .default('assert')
         expect.unreachable('should have thrown')
       } catch (e) {
         expect(e).toBeInstanceOf(NonExhaustiveError)
@@ -403,7 +403,7 @@ describe('edge cases', () => {
       const m = match
         .case(OkSchema, () => 'ok')
         .case(ErrSchema, () => 'err')
-        .exhaustive()
+        .default('assert')
 
       try {
         m({type: 'unknown'})
@@ -433,7 +433,7 @@ describe('edge cases', () => {
       const m = match
         .case(OkSchema, () => 'ok')
         .case(ErrSchema, () => 'err')
-        .exhaustive()
+        .default('assert')
 
       // Discriminator 'type' is 'ok' so it matches first branch,
       // but 'value' is wrong type — the error should show that branch's issues
@@ -459,7 +459,7 @@ describe('edge cases', () => {
         match(true as unknown)
           .case(StringSchema, () => 'string')
           .case(NumberSchema, () => 'number')
-          .exhaustive()
+          .default('assert')
         expect.unreachable('should have thrown')
       } catch (e) {
         expect(e).toBeInstanceOf(NonExhaustiveError)
@@ -474,7 +474,7 @@ describe('edge cases', () => {
       // Custom handler should still be called when provided
       const m = match
         .case(OkSchema, () => 'ok')
-        .exhaustive(() => 'custom fallback')
+        .default(() => 'custom fallback')
 
       expect(m({type: 'other'})).toBe('custom fallback')
     })

@@ -7,7 +7,7 @@ describe('zod v3', () => {
   it('matches string schema', () => {
     const result = match('hello')
       .case(z.string(), s => `got: ${s}`)
-      .otherwise(() => 'no match')
+      .default(() => 'no match')
 
     expect(result).toBe('got: hello')
   })
@@ -16,7 +16,7 @@ describe('zod v3', () => {
     const result = match(42)
       .case(z.string(), () => 'string')
       .case(z.number(), n => n + 1)
-      .otherwise(() => -1)
+      .default(() => -1)
 
     expect(result).toBe(43)
   })
@@ -25,7 +25,7 @@ describe('zod v3', () => {
     const result = match(true as unknown)
       .case(z.string(), () => 'string')
       .case(z.boolean(), b => (b ? 'yes' : 'no'))
-      .otherwise(() => 'other')
+      .default(() => 'other')
 
     expect(result).toBe('yes')
   })
@@ -35,7 +35,7 @@ describe('zod v3', () => {
 
     const result = match({name: 'alice', age: 30} as unknown)
       .case(UserSchema, user => `${user.name} is ${user.age}`)
-      .otherwise(() => 'not a user')
+      .default(() => 'not a user')
 
     expect(result).toBe('alice is 30')
   })
@@ -45,7 +45,7 @@ describe('zod v3', () => {
 
     const result = match({name: 'alice'} as unknown)
       .case(UserSchema, user => `${user.name} is ${user.age}`)
-      .otherwise(() => 'not a user')
+      .default(() => 'not a user')
 
     expect(result).toBe('not a user')
   })
@@ -53,7 +53,7 @@ describe('zod v3', () => {
   it('matches array schema', () => {
     const result = match([1, 2, 3] as unknown)
       .case(z.array(z.number()), arr => arr.length)
-      .otherwise(() => -1)
+      .default(() => -1)
 
     expect(result).toBe(3)
   })
@@ -63,13 +63,13 @@ describe('zod v3', () => {
 
     const result = match('active' as string)
       .case(StatusSchema, status => `status is ${status}`)
-      .otherwise(() => 'unknown status')
+      .default(() => 'unknown status')
 
     expect(result).toBe('status is active')
 
     const result2 = match('deleted' as string)
       .case(StatusSchema, status => `status is ${status}`)
-      .otherwise(() => 'unknown status')
+      .default(() => 'unknown status')
 
     expect(result2).toBe('unknown status')
   })
@@ -79,7 +79,7 @@ describe('zod v3', () => {
 
     const result = match(['hello', 42] as unknown)
       .case(PairSchema, ([s, n]) => `${s}:${n}`)
-      .otherwise(() => 'not a pair')
+      .default(() => 'not a pair')
 
     expect(result).toBe('hello:42')
   })
@@ -89,7 +89,7 @@ describe('zod v3', () => {
       .case(z.string(), () => 'string')
       .case(z.array(z.number()), () => 'number array')
       .case(z.object({name: z.string(), age: z.number()}), user => `user: ${user.name}`)
-      .otherwise(() => 'unknown')
+      .default(() => 'unknown')
 
     expect(result).toBe('user: bob')
   })
@@ -102,7 +102,7 @@ describe('zod v3', () => {
         n => `big: ${n}`,
       )
       .case(z.number(), n => `small: ${n}`)
-      .otherwise(() => 'not a number')
+      .default(() => 'not a number')
 
     expect(result).toBe('big: 10')
 
@@ -113,7 +113,7 @@ describe('zod v3', () => {
         n => `big: ${n}`,
       )
       .case(z.number(), n => `small: ${n}`)
-      .otherwise(() => 'not a number')
+      .default(() => 'not a number')
 
     expect(result2).toBe('small: 3')
   })
@@ -123,7 +123,7 @@ describe('zod v3', () => {
       .case(z.string(), s => `string(${s.length})`)
       .case(z.number(), n => `number(${n})`)
       .case(z.boolean(), b => `bool(${b})`)
-      .otherwise(() => 'other')
+      .default(() => 'other')
 
     expect(classify('hi')).toBe('string(2)')
     expect(classify(42)).toBe('number(42)')
@@ -148,7 +148,7 @@ describe('zod v3', () => {
         expectTypeOf(user).toEqualTypeOf<{name: string; age: number}>()
         return user
       })
-      .otherwise(() => null)
+      .default(() => null)
   })
 
   it('works with schema transformations', () => {
@@ -156,7 +156,7 @@ describe('zod v3', () => {
 
     const result = match('  hello  ' as unknown)
       .case(TrimmedString, s => `trimmed: ${s}`)
-      .otherwise(() => 'not a string')
+      .default(() => 'not a string')
 
     expect(result).toBe('trimmed: hello')
   })
@@ -169,13 +169,13 @@ describe('zod v3', () => {
 
     const result = match({host: 'localhost'} as unknown)
       .case(ConfigSchema, config => `host: ${config.host}, port: ${config.port ?? 'default'}`)
-      .otherwise(() => 'invalid config')
+      .default(() => 'invalid config')
 
     expect(result).toBe('host: localhost, port: default')
 
     const result2 = match({host: 'localhost', port: 8080} as unknown)
       .case(ConfigSchema, config => `host: ${config.host}, port: ${config.port ?? 'default'}`)
-      .otherwise(() => 'invalid config')
+      .default(() => 'invalid config')
 
     expect(result2).toBe('host: localhost, port: 8080')
   })

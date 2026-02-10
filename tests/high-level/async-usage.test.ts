@@ -11,7 +11,7 @@ describe('high-level/async-usage', () => {
   it('handles async schema validation with matchAsync', async () => {
     const result = await matchAsync(2)
       .case(AsyncNumber, async value => value + 1)
-      .otherwise(() => 0)
+      .default(() => 0)
 
     expect(result).toBe(3)
   })

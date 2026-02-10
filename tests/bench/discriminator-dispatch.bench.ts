@@ -244,7 +244,7 @@ const zodReusable = schematch
   .case(zodBranches.notificationSent, handler)
   .case(zodBranches.notificationFailed, handler)
   .case(zodBranches.systemHealthcheck, handler)
-  .exhaustive()
+  .default('assert')
 
 const valibotReusable = schematch
   .case(valibotBranches.userCreated, handler)
@@ -262,7 +262,7 @@ const valibotReusable = schematch
   .case(valibotBranches.notificationSent, handler)
   .case(valibotBranches.notificationFailed, handler)
   .case(valibotBranches.systemHealthcheck, handler)
-  .exhaustive()
+  .default('assert')
 
 const arktypeReusable = schematch
   .case(arktypeBranches.userCreated, handler)
@@ -280,7 +280,7 @@ const arktypeReusable = schematch
   .case(arktypeBranches.notificationSent, handler)
   .case(arktypeBranches.notificationFailed, handler)
   .case(arktypeBranches.systemHealthcheck, handler)
-  .exhaustive()
+  .default('assert')
 
 // --- Inline matchers (no dispatch table, rebuilt each call) ---
 
@@ -301,7 +301,7 @@ const zodInline = (input: Record<string, unknown>) =>
     .case(zodBranches.notificationSent, handler)
     .case(zodBranches.notificationFailed, handler)
     .case(zodBranches.systemHealthcheck, handler)
-    .exhaustive()
+    .default('assert')
 
 // --- ts-pattern (baseline) ---
 

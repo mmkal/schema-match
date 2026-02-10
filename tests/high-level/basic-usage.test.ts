@@ -12,7 +12,7 @@ describe('high-level/basic-usage', () => {
       .case(z.string(), s => `hello ${s.substring(1, 3)}`)
       .case(v.array(v.number()), arr => `got ${arr.length} numbers`)
       .case(type({msg: 'string'}), obj => obj.msg)
-      .otherwise(() => 'unexpected')
+      .default(() => 'unexpected')
 
     expect(stringResult).toBe('hello el')
 
@@ -20,7 +20,7 @@ describe('high-level/basic-usage', () => {
       .case(z.string(), s => `hello ${s.substring(1, 3)}`)
       .case(v.array(v.number()), arr => `got ${arr.length} numbers`)
       .case(type({msg: 'string'}), obj => obj.msg)
-      .otherwise(() => 'unexpected')
+      .default(() => 'unexpected')
 
     expect(arrayResult).toBe('got 3 numbers')
 
@@ -28,7 +28,7 @@ describe('high-level/basic-usage', () => {
       .case(z.string(), s => `hello ${s.substring(1, 3)}`)
       .case(v.array(v.number()), arr => `got ${arr.length} numbers`)
       .case(type({msg: 'string'}), obj => obj.msg)
-      .otherwise(() => 'unexpected')
+      .default(() => 'unexpected')
 
     expect(objectResult).toBe('yo')
 
@@ -36,7 +36,7 @@ describe('high-level/basic-usage', () => {
       .case(z.string(), s => `hello ${s.substring(1, 3)}`)
       .case(v.array(v.number()), arr => `got ${arr.length} numbers`)
       .case(type({msg: 'string'}), obj => obj.msg)
-      .otherwise(() => 'unexpected')
+      .default(() => 'unexpected')
 
     expect(fallbackResult).toBe('unexpected')
   })
@@ -46,16 +46,15 @@ describe('high-level/basic-usage', () => {
       .case(z.string(), s => `hello ${s.substring(1, 3)}`)
       .case(v.array(v.number()), arr => `got ${arr.length} numbers`)
       .case(type({msg: 'string'}), obj => obj.msg)
-      .otherwise(() => 'unexpected')
+      .default(() => 'unexpected')
 
-    // todo: type exhaustiveness like this?
-    // type Foo = string | number[] | {msg: string}
-
+    // type exhaustiveness via .default('never'):
     // const myMatcher2 = match
     //   .case(z.string(), s => `hello ${s.substring(1, 3)}`)
     //   .case(v.array(v.number()), arr => `got ${arr.length} numbers`)
     //   .case(type({msg: 'string'}), obj => obj.msg)
-    //   .exhaustive<Foo>()
+    //   .default('never')
+    // => (input: string | number[] | {msg: string}) => string
 
     expect(myMatcher('hello')).toBe('hello el')
     expect(myMatcher([1, 2, 3])).toBe('got 3 numbers')
@@ -78,7 +77,7 @@ describe('high-level/basic-usage', () => {
 
     const result = match('41')
       .case(ParseNumber, value => value + 1)
-      .otherwise(() => 0)
+      .default(() => 0)
 
     expect(result).toBe(42)
   })

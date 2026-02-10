@@ -32,7 +32,7 @@ describe('error message snapshots', () => {
       const err = getError(() =>
         match(42)
           .case(z.string(), () => 'string')
-          .exhaustive()
+          .default('assert')
       )
       expect(err.message).toMatchInlineSnapshot(`
         "Schema matching error: no schema matches value 42
@@ -45,7 +45,7 @@ describe('error message snapshots', () => {
       const err = getError(() =>
         match({name: 123})
           .case(z.object({name: z.string()}), () => 'ok')
-          .exhaustive()
+          .default('assert')
       )
       expect(err.message).toMatchInlineSnapshot(`
         "Schema matching error: no schema matches value {"name":123}
@@ -60,7 +60,7 @@ describe('error message snapshots', () => {
           .case(z.string(), () => 'string')
           .case(z.number(), () => 'number')
           .case(z.object({x: z.number()}), () => 'object')
-          .exhaustive()
+          .default('assert')
       )
       expect(err.message).toMatchInlineSnapshot(`
         "Schema matching error: no schema matches value true
@@ -78,7 +78,7 @@ describe('error message snapshots', () => {
         match('hello')
           .case(v.number(), () => 'number')
           .case(v.boolean(), () => 'boolean')
-          .exhaustive()
+          .default('assert')
       )
       expect(err.message).toMatchInlineSnapshot(`
         "Schema matching error: no schema matches value "hello"
@@ -93,7 +93,7 @@ describe('error message snapshots', () => {
       const err = getError(() =>
         match('hello')
           .case(type('number'), () => 'number')
-          .exhaustive()
+          .default('assert')
       )
       expect(err.message).toMatchInlineSnapshot(`
         "Schema matching error: no schema matches value "hello"
@@ -108,7 +108,7 @@ describe('error message snapshots', () => {
       const m = match
         .case(z.object({type: z.literal('ok'), value: z.number()}), () => 'ok')
         .case(z.object({type: z.literal('err'), message: z.string()}), () => 'err')
-        .exhaustive()
+        .default('assert')
 
       const err = getError(() => m({type: 'unknown'}))
       expect(err.message).toMatchInlineSnapshot(`
@@ -122,7 +122,7 @@ describe('error message snapshots', () => {
         .case(v.object({kind: v.literal('a'), x: v.number()}), () => 'a')
         .case(v.object({kind: v.literal('b'), y: v.string()}), () => 'b')
         .case(v.object({kind: v.literal('c'), z: v.boolean()}), () => 'c')
-        .exhaustive()
+        .default('assert')
 
       const err = getError(() => m({kind: 'z'}))
       expect(err.message).toMatchInlineSnapshot(`
@@ -135,7 +135,7 @@ describe('error message snapshots', () => {
       const m = match
         .case(type({status: '"active"', id: 'number'}), () => 'active')
         .case(type({status: '"inactive"', reason: 'string'}), () => 'inactive')
-        .exhaustive()
+        .default('assert')
 
       const err = getError(() => m({status: 'pending'}))
       expect(err.message).toMatchInlineSnapshot(`
@@ -150,7 +150,7 @@ describe('error message snapshots', () => {
       const m = match
         .case(z.object({type: z.literal('ok'), value: z.number()}), () => 'ok')
         .case(z.object({type: z.literal('err'), message: z.string()}), () => 'err')
-        .exhaustive()
+        .default('assert')
 
       const err = getError(() => m({type: 'ok', value: 'not-a-number'}))
       expect(err.message).toMatchInlineSnapshot(`
@@ -165,7 +165,7 @@ describe('error message snapshots', () => {
       const m = match
         .case(z.object({type: z.literal('ok'), value: z.number()}), () => 'ok')
         .case(z.object({type: z.literal('err'), message: z.string()}), () => 'err')
-        .exhaustive()
+        .default('assert')
 
       const err = getError(() => m({type: 'err'}))
       expect(err.message).toMatchInlineSnapshot(`
@@ -182,7 +182,7 @@ describe('error message snapshots', () => {
       const m = match
         .case(z.string(), () => 'string')
         .case(z.number(), () => 'number')
-        .exhaustive()
+        .default('assert')
 
       const err = getError(() => m(true))
       expect(err.message).toMatchInlineSnapshot(`
@@ -202,7 +202,7 @@ describe('error message snapshots', () => {
 
       const m = match
         .case(z.string(), () => 'string')
-        .exhaustive()
+        .default('assert')
 
       const err = getError(() => m(circular))
       // Should not throw during error construction, should fall back to String()
@@ -219,7 +219,7 @@ describe('error message snapshots', () => {
       const err = await getAsyncError(() =>
         matchAsync({type: 'unknown'})
           .case(z.object({type: z.literal('ok')}), () => 'ok')
-          .exhaustive()
+          .default('assert')
       )
       expect(err.message).toMatchInlineSnapshot(`
         "Schema matching error: no schema matches value {"type":"unknown"}

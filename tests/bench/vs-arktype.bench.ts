@@ -26,13 +26,13 @@ const schematchArktypePrimitive = schematch
   .case(ArkStringOrPrimitive, v => v)
   .case(ArkBigint, (b: bigint) => `${b}n`)
   .case(ArkObject, (o: object) => JSON.stringify(o))
-  .exhaustive()
+  .default('assert')
 
 const schematchZodPrimitive = schematch
   .case(ZodStringOrPrimitive, v => v)
   .case(ZodBigint, (b: bigint) => `${b}n`)
   .case(ZodObject, (o: object) => JSON.stringify(o))
-  .exhaustive()
+  .default('assert')
 
 const tsPatternPrimitive = (value: unknown) =>
   tsPatternMatch(value)
@@ -66,13 +66,13 @@ const schematchArktypeResultInline = (result: Result) =>
     .case(ArkError, () => 'error')
     .case(ArkOkText, ({data}) => data.content)
     .case(ArkOkImg, ({data}) => data.src)
-    .exhaustive()
+    .default('assert')
 
 const schematchArktypeResultReusable = schematch
   .case(ArkError, () => 'error')
   .case(ArkOkText, ({data}) => data.content)
   .case(ArkOkImg, ({data}) => data.src)
-  .exhaustive()
+  .default('assert')
 
 // arktype .case() with pre-built type references (avoids re-parsing definitions)
 const arktypeNativeResultCase = arktypeMatch
@@ -125,14 +125,14 @@ const reducerSchematchInline = (state: State, event: Event): State =>
     .case(ArkLoadingError, ([, e]) => ({status: 'error', error: e.error} as const))
     .case(ArkNotLoadingFetch, () => ({status: 'loading', startTime: Date.now()} as const))
     .case(ArkLoadingCancel, () => ({status: 'idle'} as const))
-    .otherwise(() => state)
+    .default(() => state)
 
 const reducerSchematchReusable = schematch
   .case(ArkLoadingSuccess, ([, e]) => ({status: 'success', data: e.data} as const))
   .case(ArkLoadingError, ([, e]) => ({status: 'error', error: e.error} as const))
   .case(ArkNotLoadingFetch, () => ({status: 'loading', startTime: Date.now()} as const))
   .case(ArkLoadingCancel, () => ({status: 'idle'} as const))
-  .otherwise(value => (value as [State, Event])[0])
+  .default(value => (value as [State, Event])[0])
 
 // arktype .case() with pre-built type references
 const reducerArktypeNativeCase = arktypeMatch
