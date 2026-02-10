@@ -2,6 +2,7 @@ import {describe, expect, expectTypeOf, it} from 'vitest'
 import {z} from 'zod'
 
 import {isMatching, match, matchAsync, NonExhaustiveError} from '../../src/index.js'
+import type {StandardSchemaV1} from '../../src/index.js'
 import {makeAsyncSchema} from '../helpers/standard-schema.js'
 
 describe('high-level/type-inference', () => {
@@ -250,6 +251,49 @@ describe('high-level/type-inference', () => {
 
       expectTypeOf(result).toEqualTypeOf<number | NonExhaustiveError>()
       expect(result).toBeInstanceOf(NonExhaustiveError)
+    })
+  })
+
+  describe('matcher as StandardSchema', () => {
+    it('satisfies StandardSchemaV1 with correct input/output types', () => {
+      const MySchema = match
+        .case(z.string(), s => s.split(','))
+        .case(z.number(), n => Array.from({length: n}, () => 'hi'))
+
+      type S = typeof MySchema
+      expectTypeOf<S['~standard']>().toExtend<{version: 1; vendor: string}>()
+
+      // InferInput should be the union of case schema input types
+      type In = StandardSchemaV1.InferInput<S>
+      expectTypeOf<In>().toEqualTypeOf<string | number>()
+
+      // InferOutput should be the union of handler return types
+      type Out = StandardSchemaV1.InferOutput<S>
+      expectTypeOf<Out>().toEqualTypeOf<string[]>()
+    })
+
+    it('satisfies StandardSchemaV1 with mixed return types', () => {
+      const MySchema = match
+        .case(z.string(), s => s.length)
+        .case(z.number(), n => String(n))
+
+      type In = StandardSchemaV1.InferInput<typeof MySchema>
+      expectTypeOf<In>().toEqualTypeOf<string | number>()
+
+      type Out = StandardSchemaV1.InferOutput<typeof MySchema>
+      expectTypeOf<Out>().toEqualTypeOf<number | string>()
+    })
+
+    it('async matcher satisfies StandardSchemaV1 with Promise validate', () => {
+      const MySchema = matchAsync
+        .case(z.string(), s => s.length)
+        .case(z.number(), n => n + 1)
+
+      type In = StandardSchemaV1.InferInput<typeof MySchema>
+      expectTypeOf<In>().toEqualTypeOf<string | number>()
+
+      type Out = StandardSchemaV1.InferOutput<typeof MySchema>
+      expectTypeOf<Out>().toEqualTypeOf<number>()
     })
   })
 })

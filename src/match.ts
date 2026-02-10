@@ -2,10 +2,13 @@ import type {StandardSchemaV1} from './standard-schema/contract.js'
 import {looksLikeStandardSchema} from './standard-schema/utils.js'
 import {ASYNC_REQUIRED, NO_MATCH, matchSchemaAsync, matchSchemaSync, extractDiscriminator, isPlainObject} from './standard-schema/compiled.js'
 import type {DiscriminatorInfo} from './standard-schema/compiled.js'
-import {isPromiseLike} from './standard-schema/validation.js'
+import {isPromiseLike, validateSync} from './standard-schema/validation.js'
 import type {InferInput, InferOutput} from './types.js'
 import {NonExhaustiveError} from './errors.js'
 import type {NonExhaustiveErrorOptions} from './errors.js'
+
+/** Resolves `Unset` to `never` for use in StandardSchema types. */
+type ResolveOutput<T> = T extends typeof unset ? never : T
 
 type MatchState<output> =
   | {matched: true; value: output}
@@ -505,10 +508,31 @@ function buildDispatchTable<input>(
 class ReusableMatcher<input, output, CaseInputs = never> {
   private dispatch: DispatchTable | null | undefined = undefined // undefined = not yet computed
 
+  /**
+   * Standard Schema V1 interface. The matcher itself is a valid standard-schema:
+   * - `validate(value)` tries all cases in order and returns `{ value }` on match or `{ issues }` on failure.
+   * - `types.input` is the union of all case schema input types (`CaseInputs`).
+   * - `types.output` is the union of all case handler return types.
+   */
+  readonly '~standard': StandardSchemaV1.Props<CaseInputs, ResolveOutput<output>>
+
   constructor(
     private readonly terminal: MatchState<output>,
     private readonly clauses: Array<ReusableClause<input> | ReusableWhenClause<input>> = []
-  ) {}
+  ) {
+    // Build the ~standard property in the constructor so it closes over `this`
+    this['~standard'] = {
+      version: 1,
+      vendor: 'schematch',
+      validate: (value: unknown): StandardSchemaV1.Result<ResolveOutput<output>> => {
+        const state = this.exec(value as input)
+        if (state.matched) {
+          return {value: state.value as ResolveOutput<output>}
+        }
+        return this.buildFailureResult(value)
+      },
+    }
+  }
 
   private getDispatch(): DispatchTable | null {
     if (this.dispatch === undefined) {
@@ -631,6 +655,36 @@ class ReusableMatcher<input, output, CaseInputs = never> {
     return new NonExhaustiveError(input, errorOptions)
   }
 
+  /** Build a standard-schema FailureResult for use in `~standard.validate`. */
+  private buildFailureResult(value: unknown): StandardSchemaV1.FailureResult {
+    const allSchemas = this.clauses.flatMap(c => 'schemas' in c ? c.schemas : [])
+    const issues: StandardSchemaV1.Issue[] = []
+
+    for (let i = 0; i < allSchemas.length; i += 1) {
+      try {
+        const result = validateSync(allSchemas[i], value)
+        if ('issues' in result && result.issues) {
+          for (const issue of result.issues) {
+            issues.push({
+              message: `Case ${i + 1}: ${issue.message}`,
+              path: issue.path,
+            })
+          }
+        }
+      } catch {
+        // async schema or validation threw — skip
+      }
+    }
+
+    if (issues.length === 0) {
+      let displayedValue: string
+      try { displayedValue = JSON.stringify(value) } catch { displayedValue = String(value) }
+      issues.push({message: `No schema matches value ${displayedValue}`})
+    }
+
+    return {issues}
+  }
+
   private execClause(clause: ReusableClause<input> | ReusableWhenClause<input>, input: input): MatchState<output> | null {
     if ('when' in clause) {
       const predicateResult = clause.when(input)
@@ -708,10 +762,30 @@ type ReusableWhenClauseAsync<input> = {
 class ReusableMatcherAsync<input, output, CaseInputs = never> {
   private dispatch: DispatchTable | null | undefined = undefined
 
+  /**
+   * Standard Schema V1 interface (async). The matcher itself is a valid standard-schema:
+   * - `validate(value)` tries all cases in order and returns `Promise<{ value }>` on match or `Promise<{ issues }>` on failure.
+   * - `types.input` is the union of all case schema input types (`CaseInputs`).
+   * - `types.output` is the union of all case handler return types.
+   */
+  readonly '~standard': StandardSchemaV1.Props<CaseInputs, ResolveOutput<output>>
+
   constructor(
     private readonly terminal: Promise<MatchState<output>>,
     private readonly clauses: Array<ReusableClauseAsync<input> | ReusableWhenClauseAsync<input>> = []
-  ) {}
+  ) {
+    this['~standard'] = {
+      version: 1,
+      vendor: 'schematch',
+      validate: async (value: unknown): Promise<StandardSchemaV1.Result<ResolveOutput<output>>> => {
+        const state = await this.exec(value as input)
+        if (state.matched) {
+          return {value: state.value as ResolveOutput<output>}
+        }
+        return this.buildFailureResult(value)
+      },
+    }
+  }
 
   private getDispatch(): DispatchTable | null {
     if (this.dispatch === undefined) {
@@ -800,7 +874,6 @@ class ReusableMatcherAsync<input, output, CaseInputs = never> {
       }
     }
 
-    modeOrHandler satisfies 'assert' | 'never'
     // 'assert' and 'never' both throw at runtime
     return async (input: input) => {
       const state = await this.exec(input)
@@ -832,6 +905,36 @@ class ReusableMatcherAsync<input, output, CaseInputs = never> {
       }
     }
     return new NonExhaustiveError(input, errorOptions)
+  }
+
+  /** Build a standard-schema FailureResult for use in `~standard.validate`. */
+  private buildFailureResult(value: unknown): StandardSchemaV1.FailureResult {
+    const allSchemas = this.clauses.flatMap(c => 'schemas' in c ? c.schemas : [])
+    const issues: StandardSchemaV1.Issue[] = []
+
+    for (let i = 0; i < allSchemas.length; i += 1) {
+      try {
+        const result = validateSync(allSchemas[i], value)
+        if ('issues' in result && result.issues) {
+          for (const issue of result.issues) {
+            issues.push({
+              message: `Case ${i + 1}: ${issue.message}`,
+              path: issue.path,
+            })
+          }
+        }
+      } catch {
+        // async schema or validation threw — skip
+      }
+    }
+
+    if (issues.length === 0) {
+      let displayedValue: string
+      try { displayedValue = JSON.stringify(value) } catch { displayedValue = String(value) }
+      issues.push({message: `No schema matches value ${displayedValue}`})
+    }
+
+    return {issues}
   }
 
   private async execClause(
