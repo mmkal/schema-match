@@ -1,16 +1,14 @@
 # schematch
 
-Schema-first pattern matching for TypeScript.
+Pattern matching for TypeScript.
 
-`schematch` lets you use [Standard Schema](https://standardschema.dev) validators (zod, valibot, arktype et. al.) as matcher clauses, so validation and branching share one source of truth.
+`schematch` lets you use [Standard Schema](https://standardschema.dev) validators (zod, valibot, arktype et. al.) as matcher clauses in pattern-matching expressions.
 
-## Install
+## Do it
 
 ```sh
 pnpm add schematch
 ```
-
-## Quick start
 
 ```typescript
 import {match} from 'schematch'
@@ -20,21 +18,6 @@ const output = match(input)
   .case(z.string(), s => `hello ${s.slice(1, 3)}`)
   .case(z.array(z.number()), arr => `got ${arr.length} numbers`)
   .case(z.object({msg: z.string()}), obj => obj.msg)
-  .default(() => 'unexpected')
-```
-
-This works with zod, valibot, arktype, and any other standard-schema compatible library. You can even mix and match libraries:
-
-```typescript
-import {match} from 'schematch'
-import {z} from 'zod'
-import * as v from 'valibot'
-import {type} from 'arktype'
-
-const output = match(input)
-  .case(z.string(), s => `hello ${s.slice(1, 3)}`)
-  .case(v.array(v.number()), arr => `got ${arr.length} numbers`)
-  .case(type({msg: 'string'}), obj => obj.msg)
   .default(() => 'unexpected')
 ```
 
@@ -89,20 +72,35 @@ const output = match(input)
   .default(() => 'fallback')
 ```
 
-## `.default(mode)` — terminating a match
+This all works with zod, valibot, arktype, and any other standard-schema compatible library. You could even mix and match libraries (but maybe don't?):
+
+```typescript
+import {match} from 'schematch'
+import {z} from 'zod'
+import * as v from 'valibot'
+import {type} from 'arktype'
+
+const output = match(input)
+  .case(z.string(), s => `hello ${s.slice(1, 3)}`)
+  .case(v.array(v.number()), arr => `got ${arr.length} numbers`)
+  .case(type({msg: 'string'}), obj => obj.msg)
+  .default(() => 'unexpected')
+```
+
+## `.default(mode)` - terminating a match
 
 The `.default()` method terminates a match expression. It accepts a handler function or one of three string modes, inspired by [ArkType's `match` API](https://arktype.io/docs/match):
 
-| Mode | Input type | On no match | Return type |
-|---|---|---|---|
-| `.default(handler)` | `unknown` (or `.input<T>()`) | Calls handler | `Output \| HandlerReturn` |
-| `.default('assert')` | `unknown` | Throws `NonExhaustiveError` | `Output` |
-| `.default('never')` | Union of case inputs | Throws `NonExhaustiveError` | `Output` |
-| `.default('reject')` | `unknown` | Returns `NonExhaustiveError` | `Output \| NonExhaustiveError` |
+| Mode | Input type | On no match | Return type | Penny for my thoughts |
+|---|---|---|---|---|
+| `.default(handler)` | `unknown` (or `.input<T>()`) | Calls handler | `Output \| HandlerReturn` | Sure |
+| `.default('never')` | Union of case inputs | Throws `NonExhaustiveError` | `Output` | The best one |
+| `.default('assert')` | `unknown` | Throws `NonExhaustiveError` | `Output` | I guess so |
+| `.default('reject')` | `unknown` | Returns `NonExhaustiveError` | `Output \| NonExhaustiveError` | Sometimes |
 
 ### `.default(handler)`
 
-A fallback handler — called with the raw input when no case matched:
+A fallback handler, called with the raw input when no case matched:
 
 ```typescript
 match(input)
@@ -110,24 +108,9 @@ match(input)
   .default(() => -1) // -1 when no case matches
 ```
 
-### `.default('assert')`
-
-Throws a `NonExhaustiveError` at runtime if no case matched. The input type is unconstrained (`unknown` for reusable matchers):
-
-```typescript
-const fn = match
-  .case(z.string(), s => s.length)
-  .case(z.number(), n => n + 1)
-  .default('assert')
-
-fn('hello') // 5
-fn(42)      // 43
-fn(true)    // throws NonExhaustiveError
-```
-
 ### `.default('never')`
 
-Like `'assert'`, but **constrains the input type** at compile time to the union of all case schema input types. Useful when you know the input will always be one of the declared cases:
+Throws a `NonExhaustiveError` at runtime if no case matched (like `'assert'`), and **constrains the input type** at compile time to the union of all case schema input types. If you like types which I think you do, this is best when you know the input will always be one of the declared cases:
 
 ```typescript
 const fn = match
@@ -146,11 +129,26 @@ For inline matchers, `'never'` produces a compile-time error if the input value 
 ```typescript
 match(42 as number)
   .case(z.number(), n => n + 1)
-  .default('never') // ok — number extends number
+  .default('never') // ok: number extends number
 
 match('hello' as unknown)
   .case(z.number(), n => n + 1)
-  .default('never') // type error — unknown doesn't extend number
+  .default('never') // type error: unknown doesn't extend number
+```
+
+### `.default('assert')`
+
+Like `'never'`, throws a `NonExhaustiveError` at runtime if no case matched. The input type is unconstrained (`unknown` for reusable matchers):
+
+```typescript
+const fn = match
+  .case(z.string(), s => s.length)
+  .case(z.number(), n => n + 1)
+  .default('assert')
+
+fn('hello') // 5
+fn(42)      // 43
+fn(true)    // throws NonExhaustiveError
 ```
 
 ### `.default('reject')`
@@ -172,16 +170,18 @@ if (result instanceof NonExhaustiveError) {
 
 ## Matchers as Standard Schemas
 
+> "wow! *another* standard-schema is produced from compose schemas via schematch!" - Winston Churchill
+
 Reusable matchers (built with `match.case(...)`) are valid [Standard Schema V1](https://standardschema.dev) implementations. They expose a `'~standard'` property with `version: 1`, `vendor: 'schematch'`, and a `validate` function.
 
-This means a matcher can be used anywhere a standard-schema is expected — including as a case schema inside another matcher:
+This means a matcher can be used anywhere a standard-schema is expected, INCLUDING as a case schema inside another matcher:
 
 ```typescript
 import {match} from 'schematch'
 import {z} from 'zod'
 import type {StandardSchemaV1} from 'schematch'
 
-// Build a matcher — it's also a StandardSchema
+// Build a matcher. It's also a StandardSchema, if you can believe such a thing
 const Stringify = match
   .case(z.string(), s => s.split(','))
   .case(z.number(), n => Array.from({length: n}, () => 'hi'))
@@ -193,7 +193,7 @@ Stringify['~standard'].validate('a,b,c')  // { value: ['a', 'b', 'c'] }
 Stringify['~standard'].validate(3)        // { value: ['hi', 'hi', 'hi'] }
 Stringify['~standard'].validate(null)     // { issues: [...] }
 
-// Compose — use a matcher as a case schema inside another matcher
+// Compose: use a matcher as a case schema inside another matcher
 const outer = match
   .case(Stringify, arr => arr.length)     // Stringify is the schema here
   .case(z.boolean(), () => -1)
@@ -206,20 +206,35 @@ outer(true)      // -1
 
 Type inference works through composition: `StandardSchemaV1.InferInput` gives the union of case input types, and `StandardSchemaV1.InferOutput` gives the union of handler return types.
 
-Async matchers (`matchAsync.case(...)`) work the same way — their `validate` function returns a `Promise`.
+Async matchers (`matchAsync.case(...)`) work the same way. Their `validate` function returns a `Promise`.
 
-**Note:** Calling `.default()` terminates the matcher and returns a plain function — the returned function is not a StandardSchema. The schema interface lives on the matcher *before* `.default()` is called.
+**Note:** Calling `.default()` terminates the matcher and returns a plain function. The returned function is not a StandardSchema. The schema interface lives on the matcher *before* `.default()` is called.
 
 ## Why use this
 
 - 🔁 Reuse existing runtime schemas for control flow.
-- 🧩 Mix schema libraries in one matcher (via Standard Schema).
-- 🔍 Keep type inference for handler inputs and return unions.
-- 🪓 Avoid duplicating validation logic in `if`/`switch` trees.
+- 🧩 Support any standard-schema libraries, even mixed libraries in one matcher.
+- 👷 It's type safe and runtime-y safe
+- 🥰 It looks nicer than `if`/`switch` trees
+
+## When use this
+
+- When you want to pattern-match
+- When you don't want to learn ts-pattern's special matching/selection rules
+- This section is kind of the same as why use this
+
+## How use this
+
+- `npm install schematch`
+- See [README.md](./README.md)
+
+## Where use this
+
+- At your... computer?
 
 ## Performance
 
-`schematch` includes compiled matcher caching and library-specific fast paths (literals, object/tuple/union/discriminator prechecks). Reusable matchers avoid rebuilding the fluent chain entirely, giving an additional speedup on hot paths.
+`schematch` if fast. It includes compiled matcher caching and library-specific fast paths (literals, object/tuple/union/discriminator prechecks). Reusable matchers avoid rebuilding the fluent chain entirely, giving an additional speedup on hot paths.
 
 Results from a representative run (ops/sec, higher is better):
 
@@ -313,7 +328,7 @@ Arktype has its own [`match` API](https://arktype.io/docs/match) that uses set t
 
 **Discriminator dispatch** (15 branches, reusable matcher with dispatch table):
 
-This benchmark uses 15 object schemas with a shared `kind` discriminator key and 2-4 additional typed fields each — a realistic event-sourcing or webhook scenario. It shows how the dispatch table helps as the branch count grows, especially for late-matching inputs.
+This benchmark uses 15 object schemas with a shared `kind` discriminator key and 2-4 additional typed fields each. Roughly simulating an event-sourcing or webhook scenario. It shows how the dispatch table helps as the branch count grows, especially for late-matching inputs.
 
 <!-- bench:fullName="tests/bench/discriminator-dispatch.bench.ts > 15-branch discriminated: mixed inputs (realistic)" -->
 
@@ -349,7 +364,7 @@ Every schema object is compiled into a `{ sync, async }` pair of functions exact
 
 ### Literal fast path
 
-Before trying any library-specific path, the compiler checks whether the schema represents a single literal value (e.g. `z.literal('ok')`, `v.literal(42)`, `type('ok')`). If so, the compiled matcher is a single `Object.is()` comparison — zero allocation, no validation overhead.
+Before trying any library-specific path, the compiler checks whether the schema represents a single literal value (e.g. `z.literal('ok')`, `v.literal(42)`, `type('ok')`). If so, the compiled matcher is a single `Object.is()` comparison with no allocation or validation overhead.
 
 Detection is duck-typed across libraries: arktype's `unit` property, valibot's `type === 'literal'` with a `.literal` field, and zod's `_def.type === 'literal'` with a single-element `values` array.
 
@@ -361,9 +376,9 @@ When the literal fast path doesn't apply, the compiler detects which library pro
 
 **Zod** (`_zod.run`): Calls zod's internal `run` method directly instead of going through `~standard.validate`. Pre-allocates payload (`{value, issues}`) and context (`{async: false}`) objects and reuses them across calls by mutating `.value` and setting `.issues.length = 0`. This avoids allocating new objects on every match attempt.
 
-**Valibot** (`~run`): Similar approach — calls valibot's internal `~run` directly. Pre-allocates a shared `config` object.
+**Valibot** (`~run`): Similar approach: calls valibot's internal `~run` directly. Pre-allocates a shared `config` object.
 
-**Arktype** (`.allows`): Uses arktype's `.allows(value)` method, which returns a boolean without creating result objects or issue arrays — zero allocation per call. When the schema has no transforms, the input value is returned directly without calling the full validation pipeline.
+**Arktype** (`.allows`): Uses arktype's `.allows(value)` method, which returns a boolean without creating result objects or issue arrays, so no allocation per call. When the schema has no transforms, the input value is returned directly without calling the full validation pipeline.
 
 **Generic fallback**: For any other Standard Schema V1 implementation, calls `~standard.validate` and inspects the result.
 
@@ -371,13 +386,13 @@ When the literal fast path doesn't apply, the compiler detects which library pro
 
 ### Recursive prechecks
 
-For zod and valibot, the compiler recursively walks the schema definition tree and builds a lightweight boolean predicate — a "precheck" — that can reject non-matching values cheaply before invoking the library's validation.
+For zod and valibot, the compiler recursively walks the schema definition tree and builds a lightweight boolean predicate (a "precheck") that can reject non-matching values cheaply before invoking the library's validation.
 
 The precheck handles: literals (`Object.is`), primitives (`typeof`), objects (per-key checks), tuples (per-item checks with length bounds), unions (any-of), discriminated unions/variants (Map lookup on discriminator key), `null`/`undefined`/`Date`/`instanceof`.
 
 Each precheck node is classified as **complete** or **partial**:
 
-- **Complete**: The precheck fully covers the schema's type constraint (no transforms, refinements, `.pipe()`, `.checks`, or unhandled schema types in the tree). When a precheck is complete, the library's validation is skipped entirely — the precheck result alone determines match/no-match, and the raw input value is returned.
+- **Complete**: The precheck fully covers the schema's type constraint (no transforms, refinements, `.pipe()`, `.checks`, or unhandled schema types in the tree). When a precheck is complete, the library's validation is skipped entirely. The precheck result alone determines match/no-match, and the raw input value is returned.
 - **Partial**: The precheck can fast-reject values that definitely don't match (e.g. wrong `typeof`, missing discriminator) but a passing precheck still requires full validation to confirm. This is the common case for schemas with `.min()`, `.regex()`, `.refine()`, etc.
 
 For valibot's `variant` type (discriminated union), the precheck builds a `Map<discriminatorValue, check>` for O(1) dispatch on the discriminator field, rather than iterating through union options.
@@ -386,11 +401,11 @@ For valibot's `variant` type (discriminated union), the precheck builds a `Map<d
 
 ### Reusable matchers
 
-When you write `match.case(...).case(...).default(...)` (without an input value), schematch builds a `ReusableMatcher` that stores the clause list as a plain array at construction time. The returned function iterates the pre-built array on each call — no `new MatchExpression()`, no fluent chain, no per-call allocation of clause structures. Benchmarks show a ~20-40% throughput increase over inline matching.
+When you write `match.case(...).case(...).default(...)` (without an input value), schematch builds a `ReusableMatcher` that stores the clause list as a plain array at construction time. The returned function iterates the pre-built array on each call: no `new MatchExpression()`, no fluent chain, no per-call allocation of clause structures. Benchmarks show a ~20-40% throughput increase over inline matching.
 
 Reusable matchers are also valid Standard Schema V1 implementations (see [Matchers as Standard Schemas](#matchers-as-standard-schemas)), so they can be composed with other matchers or used anywhere a standard-schema is expected.
 
-**Tradeoff:** The reusable matcher's clause array is allocated once and shared across calls. This is faster but means the matcher is fixed after construction — you can't add branches dynamically.
+**Tradeoff:** The reusable matcher's clause array is allocated once and shared across calls. This is faster but means the matcher is fixed after construction. You can't add branches dynamically.
 
 ### Cross-branch discriminator dispatch
 
@@ -402,7 +417,7 @@ Discriminator extraction is library-specific:
 - **Valibot**: Inspects `schema.entries` for keys where `entry.type === 'literal'`.
 - **Arktype**: Inspects `schema.json.required` for entries where `value.unit` exists.
 
-When multiple keys are literal-typed, preferred discriminator names (`type`, `kind`, `status`, `_tag`, `tag`) take priority. Clauses without an extractable discriminator (e.g. `.when()` predicates, non-object schemas) go into a fallback set that's always checked. Original clause ordering is preserved — first-match-wins semantics are maintained.
+When multiple keys are literal-typed, preferred discriminator names (`type`, `kind`, `status`, `_tag`, `tag`) take priority. Clauses without an extractable discriminator (e.g. `.when()` predicates, non-object schemas) go into a fallback set that's always checked. Original clause ordering is preserved: first-match-wins semantics are maintained.
 
 **Tradeoff:** Only applies to reusable matchers (not inline), only works for object schemas with shared literal keys, and adds a small construction-time cost for schema introspection. For non-discriminated schemas or non-object inputs, the dispatch table is skipped and matching falls back to the linear scan.
 
@@ -438,7 +453,7 @@ A few smaller techniques contribute to throughput:
 | Partial precheck | Any compiled schema | Full validation on mismatches | Precheck call + full validation on match |
 | Reusable matcher | Hot paths with repeated matching | Fluent chain rebuild | Fixed clause array |
 | Discriminator dispatch | Reusable matchers with shared literal key | Non-matching branches | One property read + Map lookup |
-| Enhanced error messages | `.default('assert')` failures | — | Re-validation on error path only |
+| Enhanced error messages | `.default('assert')` failures | - | Re-validation on error path only |
 
 ## Supported ecosystems
 
@@ -454,26 +469,26 @@ A few smaller techniques contribute to throughput:
 
 Sync matcher builder:
 
-- `.output<T>()` — constrain the return type of the matcher
-- `.case(schema, handler)` — try a schema, run handler if it matches
-- `.case(schema, predicate, handler)` — schema + guard
-- `.case(schemaA, schemaB, ..., handler)` — multiple schemas, first match wins
-- `.when(predicate, handler)` — no schema, just a predicate
-- `.default(handler)` — fallback handler for unmatched inputs
-- `.default('assert')` — throw `NonExhaustiveError` if nothing matched
-- `.default('never')` — throw if nothing matched; type error if input doesn't extend case union
-- `.default('reject')` — return `NonExhaustiveError` instead of throwing
+- `.output<T>()` - constrain the return type of the matcher
+- `.case(schema, handler)` - try a schema, run handler if it matches
+- `.case(schema, predicate, handler)` - schema + guard
+- `.case(schemaA, schemaB, ..., handler)` - multiple schemas, first match wins
+- `.when(predicate, handler)` - no schema, just a predicate
+- `.default(handler)` - fallback handler for unmatched inputs
+- `.default('assert')` - throw `NonExhaustiveError` if nothing matched
+- `.default('never')` - throw if nothing matched; type error if input doesn't extend case union
+- `.default('reject')` - return `NonExhaustiveError` instead of throwing
 
 `handler` receives `(parsedValue, input)`. For transforming schemas, `parsedValue` is transformed output; for non-transforming schemas, fast paths may pass through the input value.
 
-### `match.case(...)` — reusable matchers
+### `match.case(...)` - reusable matchers
 
 Static builder entrypoints that return reusable functions:
 
-- `match.input<T>()` — constrain the input type for a reusable matcher
-- `match.output<T>()` — constrain the output type for a reusable matcher
-- `.at(key)` — switch to discriminator-value cases (`.case(value, handler)`)
-- `match.case(...).case(...).default(...)` — build a reusable matcher function
+- `match.input<T>()` - constrain the input type for a reusable matcher
+- `match.output<T>()` - constrain the output type for a reusable matcher
+- `.at(key)` - switch to discriminator-value cases (`.case(value, handler)`)
+- `match.case(...).case(...).default(...)` - build a reusable matcher function
 
 Reusable matchers are also valid Standard Schema V1 implementations. Before `.default()` is called, they expose a `'~standard'` property with `validate`, allowing them to be used as schemas in other matchers or any standard-schema consumer.
 
@@ -540,7 +555,7 @@ Schema-backed type guards.
 
 Thrown by `.default('assert')` / `.default('never')`, or returned by `.default('reject')`.
 
-Implements `StandardSchemaV1.FailureResult` — the `.issues` array contains per-case validation details conforming to the standard-schema spec. Also exposes `.input`, `.schemas`, and `.discriminator` for programmatic access.
+Implements `StandardSchemaV1.FailureResult`. The `.issues` array contains per-case validation details conforming to the standard-schema spec. Also exposes `.input`, `.schemas`, and `.discriminator` for programmatic access.
 
 ## Type inference
 
@@ -550,6 +565,10 @@ Implements `StandardSchemaV1.FailureResult` — the `.issues` array contains per
 - `.default('never')` constrains the reusable matcher's input to the union of case schema input types.
 - `StandardSchemaV1.InferInput<typeof matcher>` gives the case input union; `StandardSchemaV1.InferOutput<typeof matcher>` gives the handler return union.
 - `isMatching` narrows from `unknown` using schema output.
+
+## Other fun stuff
+
+schematch also exports a `prettifyStandardSchemaError` which works on any standard-schema error object and makes it more human-readable (and less token-wasteful for LLMs). That's not an official part of the API surface though so it might move around.
 
 ## Comparison
 
@@ -569,7 +588,7 @@ Use `schematch` when schema-driven validation is central and you want matching t
 
 - Use `matchAsync`/`isMatchingAsync` for async schema validation.
 - `.default('assert')` and `.default('never')` provide runtime exhaustiveness, not compile-time algebraic exhaustiveness. TypeScript cannot verify that your case schemas cover every member of a union at the type level.
-- `.when()` clauses don't contribute to `CaseInputs` for `.default('never')` — use `.input<T>()` for full control when mixing `.when()` with input constraints.
+- `.when()` clauses don't contribute to `CaseInputs` for `.default('never')`. Use `.input<T>()` for full control when mixing `.when()` with input constraints.
 
 ## Exports
 
