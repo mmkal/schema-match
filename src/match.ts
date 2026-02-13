@@ -10,6 +10,53 @@ import type {NonExhaustiveErrorOptions} from './errors.js'
 /** Resolves `Unset` to `never` for use in StandardSchema types. */
 type ResolveOutput<T> = T extends typeof unset ? never : T
 
+/**
+ * Checks if two types are strictly equal using the TypeScript internal identical-to operator.
+ * @see https://github.com/microsoft/TypeScript/issues/55188#issuecomment-1656328122
+ */
+type IsNever<T> = [T] extends [never] ? true : false
+type StrictEqual<L, R> =
+  (<T>() => T extends (L & T) | T ? true : false) extends <T>() => T extends (R & T) | T ? true : false
+    ? IsNever<L> extends IsNever<R>
+      ? true
+      : false
+    : false
+
+/** Detects whether `T` is a union type (e.g. `A | B`) vs a single type. */
+type IsUnion<T, U = T> = T extends unknown ? ([U] extends [T] ? false : true) : false
+
+/**
+ * When a schema is a "pure validator" (input type === output type, i.e. no transformation)
+ * and the input is a union type, use `Extract<input, output>` to narrow the input type and
+ * preserve extra properties that weren't specified in the schema.
+ *
+ * This enables discriminated union narrowing: matching `OpencodeEvent` against
+ * `z.object({type: z.literal('session.status')})` gives the handler the full
+ * `{type: 'session.status', sessionId: string}` member, not just `{type: 'session.status'}`.
+ *
+ * Falls back to `InferOutput<schema>` when:
+ * - The schema transforms (input !== output), or
+ * - The input is not a union (no narrowing benefit), or
+ * - `Extract` produces `never` (schema output doesn't overlap with input)
+ */
+type NarrowedOutput<input, schema extends StandardSchemaV1> =
+  StrictEqual<InferInput<schema>, InferOutput<schema>> extends true
+    ? IsUnion<input> extends true
+      ? [Extract<input, InferOutput<schema>>] extends [never]
+        ? InferOutput<schema>
+        : Extract<input, InferOutput<schema>>
+      : InferOutput<schema>
+    : InferOutput<schema>
+
+type AtCaseValues<input, key extends PropertyKey> =
+  input extends unknown
+    ? key extends keyof input
+      ? input[key]
+      : never
+    : never
+
+type AtCaseInput<input, key extends PropertyKey, value> = Extract<input, Record<key, value>>
+
 type MatchState<output> =
   | {matched: true; value: output}
   | {matched: false; value: undefined}
@@ -31,15 +78,15 @@ type MatchFactory = {
   output<output>(): ReusableMatcher<unknown, output>
   case<input, schema extends StandardSchemaV1, result>(
     schema: schema,
-    handler: (value: InferOutput<schema>, input: input) => result
+    handler: (parsed: InferOutput<schema>, input: NarrowedOutput<input, schema>) => result
   ): ReusableMatcher<input, WithReturn<Unset, result>, InferInput<schema>>
   case<input, schema extends StandardSchemaV1, result>(
     schema: schema,
-    predicate: (value: InferOutput<schema>, input: input) => unknown,
-    handler: (value: InferOutput<schema>, input: input) => result
+    predicate: (parsed: InferOutput<schema>, input: NarrowedOutput<input, schema>) => unknown,
+    handler: (parsed: InferOutput<schema>, input: NarrowedOutput<input, schema>) => result
   ): ReusableMatcher<input, WithReturn<Unset, result>, InferInput<schema>>
   case<input, schemas extends readonly [StandardSchemaV1, ...StandardSchemaV1[]], result>(
-    ...args: [...schemas, (value: InferOutput<schemas[number]>, input: input) => result]
+    ...args: [...schemas, (parsed: InferOutput<schemas[number]>, input: input) => result]
   ): ReusableMatcher<input, WithReturn<Unset, result>, InferInput<schemas[number]>>
 }
 
@@ -49,15 +96,15 @@ type MatchAsyncFactory = {
   output<output>(): ReusableMatcherAsync<unknown, output>
   case<input, schema extends StandardSchemaV1, result>(
     schema: schema,
-    handler: (value: InferOutput<schema>, input: input) => result | Promise<result>
+    handler: (parsed: InferOutput<schema>, input: NarrowedOutput<input, schema>) => result | Promise<result>
   ): ReusableMatcherAsync<input, WithAsyncReturn<Unset, result>, InferInput<schema>>
   case<input, schema extends StandardSchemaV1, result>(
     schema: schema,
-    predicate: (value: InferOutput<schema>, input: input) => unknown | Promise<unknown>,
-    handler: (value: InferOutput<schema>, input: input) => result | Promise<result>
+    predicate: (parsed: InferOutput<schema>, input: NarrowedOutput<input, schema>) => unknown | Promise<unknown>,
+    handler: (parsed: InferOutput<schema>, input: NarrowedOutput<input, schema>) => result | Promise<result>
   ): ReusableMatcherAsync<input, WithAsyncReturn<Unset, result>, InferInput<schema>>
   case<input, schemas extends readonly [StandardSchemaV1, ...StandardSchemaV1[]], result>(
-    ...args: [...schemas, (value: InferOutput<schemas[number]>, input: input) => result | Promise<result>]
+    ...args: [...schemas, (parsed: InferOutput<schemas[number]>, input: input) => result | Promise<result>]
   ): ReusableMatcherAsync<input, WithAsyncReturn<Unset, result>, InferInput<schemas[number]>>
 }
 
@@ -114,15 +161,15 @@ class MatchExpression<input, output, CaseInputs = never> {
 
   case<schema extends StandardSchemaV1, result>(
     schema: schema,
-    handler: (value: InferOutput<schema>, input: input) => result
+    handler: (parsed: InferOutput<schema>, input: NarrowedOutput<input, schema>) => result
   ): MatchExpression<input, WithReturn<output, result>, CaseInputs | InferInput<schema>>
   case<schema extends StandardSchemaV1, result>(
     schema: schema,
-    predicate: (value: InferOutput<schema>, input: input) => unknown,
-    handler: (value: InferOutput<schema>, input: input) => result
+    predicate: (parsed: InferOutput<schema>, input: NarrowedOutput<input, schema>) => unknown,
+    handler: (parsed: InferOutput<schema>, input: NarrowedOutput<input, schema>) => result
   ): MatchExpression<input, WithReturn<output, result>, CaseInputs | InferInput<schema>>
   case<schemas extends readonly [StandardSchemaV1, ...StandardSchemaV1[]], result>(
-    ...args: [...schemas, (value: InferOutput<schemas[number]>, input: input) => result]
+    ...args: [...schemas, (parsed: InferOutput<schemas[number]>, input: input) => result]
   ): MatchExpression<input, WithReturn<output, result>, CaseInputs | InferInput<schemas[number]>>
   case(...args: any[]): MatchExpression<input, any, any> {
     if (this.matched) return this
@@ -264,15 +311,15 @@ class MatchExpressionAsync<input, output, CaseInputs = never> {
 
   case<schema extends StandardSchemaV1, result>(
     schema: schema,
-    handler: (value: InferOutput<schema>, input: input) => result | Promise<result>
+    handler: (parsed: InferOutput<schema>, input: NarrowedOutput<input, schema>) => result | Promise<result>
   ): MatchExpressionAsync<input, WithAsyncReturn<output, result>, CaseInputs | InferInput<schema>>
   case<schema extends StandardSchemaV1, result>(
     schema: schema,
-    predicate: (value: InferOutput<schema>, input: input) => unknown | Promise<unknown>,
-    handler: (value: InferOutput<schema>, input: input) => result | Promise<result>
+    predicate: (parsed: InferOutput<schema>, input: NarrowedOutput<input, schema>) => unknown | Promise<unknown>,
+    handler: (parsed: InferOutput<schema>, input: NarrowedOutput<input, schema>) => result | Promise<result>
   ): MatchExpressionAsync<input, WithAsyncReturn<output, result>, CaseInputs | InferInput<schema>>
   case<schemas extends readonly [StandardSchemaV1, ...StandardSchemaV1[]], result>(
-    ...args: [...schemas, (value: InferOutput<schemas[number]>, input: input) => result | Promise<result>]
+    ...args: [...schemas, (parsed: InferOutput<schemas[number]>, input: input) => result | Promise<result>]
   ): MatchExpressionAsync<input, WithAsyncReturn<output, result>, CaseInputs | InferInput<schemas[number]>>
   case(...args: any[]): MatchExpressionAsync<input, any, any> {
     const length = args.length
@@ -505,6 +552,32 @@ function buildDispatchTable<input>(
   return {key: commonKey, table, fallback: fallbackIndices, fallbackSet: new Set(fallbackIndices), expectedValues}
 }
 
+function atCaseSchema<input, key extends PropertyKey, value>(
+  key: key,
+  expected: value
+): StandardSchemaV1<AtCaseInput<input, key, value>, AtCaseInput<input, key, value>> {
+  return {
+    '~standard': {
+      version: 1,
+      vendor: 'schematch',
+      validate: (candidate: unknown) => {
+        if (!isPlainObject(candidate)) {
+          return {
+            issues: [{message: `Expected object with ${String(key)} = ${String(expected)}`}] as StandardSchemaV1.Issue[],
+          }
+        }
+        const actual = (candidate as Record<PropertyKey, unknown>)[key]
+        if (!Object.is(actual, expected)) {
+          return {
+            issues: [{message: `Expected ${String(key)} = ${String(expected)}`}] as StandardSchemaV1.Issue[],
+          }
+        }
+        return {value: candidate as AtCaseInput<input, key, value>}
+      },
+    },
+  }
+}
+
 class ReusableMatcher<input, output, CaseInputs = never> {
   private dispatch: DispatchTable | null | undefined = undefined // undefined = not yet computed
 
@@ -543,15 +616,15 @@ class ReusableMatcher<input, output, CaseInputs = never> {
 
   case<schema extends StandardSchemaV1, result>(
     schema: schema,
-    handler: (value: InferOutput<schema>, input: input) => result
+    handler: (parsed: InferOutput<schema>, input: NarrowedOutput<input, schema>) => result
   ): ReusableMatcher<input, WithReturn<output, result>, CaseInputs | InferInput<schema>>
   case<schema extends StandardSchemaV1, result>(
     schema: schema,
-    predicate: (value: InferOutput<schema>, input: input) => unknown,
-    handler: (value: InferOutput<schema>, input: input) => result
+    predicate: (parsed: InferOutput<schema>, input: NarrowedOutput<input, schema>) => unknown,
+    handler: (parsed: InferOutput<schema>, input: NarrowedOutput<input, schema>) => result
   ): ReusableMatcher<input, WithReturn<output, result>, CaseInputs | InferInput<schema>>
   case<schemas extends readonly [StandardSchemaV1, ...StandardSchemaV1[]], result>(
-    ...args: [...schemas, (value: InferOutput<schemas[number]>, input: input) => result]
+    ...args: [...schemas, (parsed: InferOutput<schemas[number]>, input: input) => result]
   ): ReusableMatcher<input, WithReturn<output, result>, CaseInputs | InferInput<schemas[number]>>
   case(...args: any[]): ReusableMatcher<input, any, any> {
     const length = args.length
@@ -573,6 +646,10 @@ class ReusableMatcher<input, output, CaseInputs = never> {
 
   output<O>(): ReusableMatcher<input, O, CaseInputs> {
     return this as any
+  }
+
+  at<key extends PropertyKey>(key: key): ReusableMatcherAt<input, output, CaseInputs, key> {
+    return new ReusableMatcherAt(this, key)
   }
 
   /**
@@ -746,6 +823,56 @@ class ReusableMatcher<input, output, CaseInputs = never> {
   }
 }
 
+class ReusableMatcherAt<input, output, CaseInputs = never, key extends PropertyKey = PropertyKey> {
+  readonly '~standard': StandardSchemaV1.Props<CaseInputs, ResolveOutput<output>>
+
+  constructor(
+    private readonly matcher: ReusableMatcher<input, output, CaseInputs>,
+    private readonly key: key
+  ) {
+    this['~standard'] = matcher['~standard'] as StandardSchemaV1.Props<CaseInputs, ResolveOutput<output>>
+  }
+
+  case<value extends AtCaseValues<input, key>, result>(
+    value: value,
+    handler: (value: AtCaseInput<input, key, value>) => result
+  ): ReusableMatcherAt<input, WithReturn<output, result>, CaseInputs | AtCaseInput<input, key, value>, key> {
+    const schema = atCaseSchema<input, key, value>(this.key, value)
+    const next = this.matcher.case(schema, (_parsed, narrowed) =>
+      handler(narrowed as AtCaseInput<input, key, value>)
+    ) as ReusableMatcher<input, WithReturn<output, result>, CaseInputs | AtCaseInput<input, key, value>>
+
+    return new ReusableMatcherAt(next, this.key)
+  }
+
+  when<result>(
+    predicate: (value: input) => unknown,
+    handler: (value: input, input: input) => result
+  ): ReusableMatcherAt<input, WithReturn<output, result>, CaseInputs, key> {
+    return new ReusableMatcherAt(this.matcher.when(predicate, handler), this.key) as any
+  }
+
+  output<O>(): ReusableMatcherAt<input, O, CaseInputs, key> {
+    return new ReusableMatcherAt(this.matcher.output<O>(), this.key) as any
+  }
+
+  default(
+    mode: 'assert'
+  ): (input: input) => output
+  default(
+    mode: 'never'
+  ): (input: CaseInputs) => output
+  default(
+    mode: 'reject'
+  ): (input: input) => output | NonExhaustiveError
+  default<result>(
+    handler: (value: input) => result
+  ): (input: input) => WithReturn<output, result>
+  default(modeOrHandler: 'assert' | 'never' | 'reject' | ((value: input) => unknown)): (input: any) => unknown {
+    return this.matcher.default(modeOrHandler as any) as any
+  }
+}
+
 // ─── ReusableMatcherAsync (async reusable) ───────────────────────────────────
 
 type ReusableClauseAsync<input> = {
@@ -796,15 +923,15 @@ class ReusableMatcherAsync<input, output, CaseInputs = never> {
 
   case<schema extends StandardSchemaV1, result>(
     schema: schema,
-    handler: (value: InferOutput<schema>, input: input) => result | Promise<result>
+    handler: (parsed: InferOutput<schema>, input: NarrowedOutput<input, schema>) => result | Promise<result>
   ): ReusableMatcherAsync<input, WithAsyncReturn<output, result>, CaseInputs | InferInput<schema>>
   case<schema extends StandardSchemaV1, result>(
     schema: schema,
-    predicate: (value: InferOutput<schema>, input: input) => unknown | Promise<unknown>,
-    handler: (value: InferOutput<schema>, input: input) => result | Promise<result>
+    predicate: (parsed: InferOutput<schema>, input: NarrowedOutput<input, schema>) => unknown | Promise<unknown>,
+    handler: (parsed: InferOutput<schema>, input: NarrowedOutput<input, schema>) => result | Promise<result>
   ): ReusableMatcherAsync<input, WithAsyncReturn<output, result>, CaseInputs | InferInput<schema>>
   case<schemas extends readonly [StandardSchemaV1, ...StandardSchemaV1[]], result>(
-    ...args: [...schemas, (value: InferOutput<schemas[number]>, input: input) => result | Promise<result>]
+    ...args: [...schemas, (parsed: InferOutput<schemas[number]>, input: input) => result | Promise<result>]
   ): ReusableMatcherAsync<input, WithAsyncReturn<output, result>, CaseInputs | InferInput<schemas[number]>>
   case(...args: any[]): ReusableMatcherAsync<input, any, any> {
     const length = args.length
@@ -826,6 +953,10 @@ class ReusableMatcherAsync<input, output, CaseInputs = never> {
 
   output<O>(): ReusableMatcherAsync<input, O, CaseInputs> {
     return this as any
+  }
+
+  at<key extends PropertyKey>(key: key): ReusableMatcherAsyncAt<input, output, CaseInputs, key> {
+    return new ReusableMatcherAsyncAt(this, key)
   }
 
   /**
@@ -981,5 +1112,55 @@ class ReusableMatcherAsync<input, output, CaseInputs = never> {
     }
 
     return await this.terminal
+  }
+}
+
+class ReusableMatcherAsyncAt<input, output, CaseInputs = never, key extends PropertyKey = PropertyKey> {
+  readonly '~standard': StandardSchemaV1.Props<CaseInputs, ResolveOutput<output>>
+
+  constructor(
+    private readonly matcher: ReusableMatcherAsync<input, output, CaseInputs>,
+    private readonly key: key
+  ) {
+    this['~standard'] = matcher['~standard'] as StandardSchemaV1.Props<CaseInputs, ResolveOutput<output>>
+  }
+
+  case<value extends AtCaseValues<input, key>, result>(
+    value: value,
+    handler: (value: AtCaseInput<input, key, value>) => result | Promise<result>
+  ): ReusableMatcherAsyncAt<input, WithAsyncReturn<output, result>, CaseInputs | AtCaseInput<input, key, value>, key> {
+    const schema = atCaseSchema<input, key, value>(this.key, value)
+    const next = this.matcher.case(schema, (_parsed, narrowed) =>
+      handler(narrowed as AtCaseInput<input, key, value>)
+    ) as ReusableMatcherAsync<input, WithAsyncReturn<output, result>, CaseInputs | AtCaseInput<input, key, value>>
+
+    return new ReusableMatcherAsyncAt(next, this.key)
+  }
+
+  when<result>(
+    predicate: (value: input) => unknown | Promise<unknown>,
+    handler: (value: input, input: input) => result | Promise<result>
+  ): ReusableMatcherAsyncAt<input, WithAsyncReturn<output, result>, CaseInputs, key> {
+    return new ReusableMatcherAsyncAt(this.matcher.when(predicate, handler), this.key) as any
+  }
+
+  output<O>(): ReusableMatcherAsyncAt<input, O, CaseInputs, key> {
+    return new ReusableMatcherAsyncAt(this.matcher.output<O>(), this.key) as any
+  }
+
+  default(
+    mode: 'assert'
+  ): (input: input) => Promise<output>
+  default(
+    mode: 'never'
+  ): (input: CaseInputs) => Promise<output>
+  default(
+    mode: 'reject'
+  ): (input: input) => Promise<output | NonExhaustiveError>
+  default<result>(
+    handler: (value: input) => result | Promise<result>
+  ): (input: input) => Promise<WithAsyncReturn<output, result>>
+  default(modeOrHandler: 'assert' | 'never' | 'reject' | ((value: input) => unknown | Promise<unknown>)): (input: any) => Promise<unknown> {
+    return this.matcher.default(modeOrHandler as any) as any
   }
 }

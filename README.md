@@ -464,7 +464,7 @@ Sync matcher builder:
 - `.default('never')` — throw if nothing matched; type error if input doesn't extend case union
 - `.default('reject')` — return `NonExhaustiveError` instead of throwing
 
-`handler` receives `(parsedValue, input)` where `parsedValue` is schema output.
+`handler` receives `(parsedValue, input)`. For transforming schemas, `parsedValue` is transformed output; for non-transforming schemas, fast paths may pass through the input value.
 
 ### `match.case(...)` — reusable matchers
 
@@ -472,9 +472,61 @@ Static builder entrypoints that return reusable functions:
 
 - `match.input<T>()` — constrain the input type for a reusable matcher
 - `match.output<T>()` — constrain the output type for a reusable matcher
+- `.at(key)` — switch to discriminator-value cases (`.case(value, handler)`)
 - `match.case(...).case(...).default(...)` — build a reusable matcher function
 
 Reusable matchers are also valid Standard Schema V1 implementations. Before `.default()` is called, they expose a `'~standard'` property with `validate`, allowing them to be used as schemas in other matchers or any standard-schema consumer.
+
+### Narrowing unions
+
+For trusted union-typed values, there are two ways to narrow to a member inside reusable matchers.
+
+- If your union has a discriminator key (`type`, `kind`, etc.), use `.at(key)`.
+- If it does not, use the second handler arg `input` - the input type, narrowed to the input of the schema specified using `.case`.
+
+For untrusted/external data, prefer full schema `.case(...)` validation over discriminator-only checks.
+
+#### Option 1: `.at(key)` for discriminated unions
+
+```typescript
+type OpencodeEvent =
+  | {type: 'session.status'; sessionId: string}
+  | {type: 'message.updated'; properties: {sessionId: string}}
+
+const getSessionId = match
+  .input<OpencodeEvent>()
+  .at('type')
+  .case('session.status', value => value.sessionId)
+  .case('message.updated', value => value.properties.sessionId)
+  .default('assert')
+```
+
+`at().case()` checks `input[key] === value` and narrows the handler type. It does not run full branch schema validation.
+
+#### Option 2: `input` as second handler arg for non-discriminated unions
+
+When you use `.case`, you are specify a way of parsing data, so the first argument *only* contains data which has been successfully parsed. So it can't be used to narrow a union type to include additional properties (because they *haven't* been parsed).
+
+```typescript
+type Lead =
+  | {email: string; campaignId: string; submittedAtIso: string}
+  | {phone: string; country: string; submittedAtIso: string}
+
+const routeLead = match
+  .input<Lead>()
+  .case(z.object({email: z.string().email()}), parsed => parsed.campaignId) // tsc error: Property 'campaignId' does not exist on type '{ email: string }'
+  .default(() => 'fallback')
+```
+
+But if you're working with trusted input, you may be fine with unvalidated properties. In those cases, you can explicitly ignore the parsed input and use the second argument passed to the handler function:
+
+```typescript
+const routeLead = match
+  .input<Lead>()
+  .case(z.object({email: z.string().email()}), (_parsed, input) => `email:${input.campaignId}`)
+  .case(z.object({phone: z.string()}), (_parsed, input) => `sms:${input.country}`)
+  .default('assert')
+```
 
 ### `matchAsync(value)` / `matchAsync.case(...)`
 
@@ -492,7 +544,8 @@ Implements `StandardSchemaV1.FailureResult` — the `.issues` array contains per
 
 ## Type inference
 
-- Handler input type is inferred from schema output type.
+- First handler arg (`parsed`) is inferred from schema output type.
+- Second handler arg (`input`) is for input-oriented logic and narrows in common non-transforming union cases.
 - Return types are unioned across branches.
 - `.default('never')` constrains the reusable matcher's input to the union of case schema input types.
 - `StandardSchemaV1.InferInput<typeof matcher>` gives the case input union; `StandardSchemaV1.InferOutput<typeof matcher>` gives the handler return union.

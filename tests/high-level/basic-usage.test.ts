@@ -1,3 +1,4 @@
+import {match as tspmatch} from 'ts-pattern'
 import {describe, expect, it} from 'vitest'
 import {type} from 'arktype'
 import * as v from 'valibot'
@@ -62,6 +63,60 @@ describe('high-level/basic-usage', () => {
     expect(myMatcher(42)).toBe('unexpected')
   })
 
+  it('xyz', () => {
+    type OpencodeEvent =
+      | {type: 'session.status'; sessionId: string}
+      | {type: 'message.updated'; properties: {sessionId: string}}
+
+    match
+      .input<OpencodeEvent>()
+      // @ts-expect-error parsed arg is schema output, not full union member
+      .case(z.object({type: z.literal('session.status')}), (value) => value.sessionId)
+      // @ts-expect-error parsed arg is schema output, not full union member
+      .case(z.object({type: z.literal('message.updated')}), (value) => value.properties.sessionId)
+    const input = JSON.parse(`{"type": "session.status", "session_id": "abc"}`)
+
+    tspmatch<OpencodeEvent>(input)
+      .with({type: 'session.status'}, ({sessionId}) => sessionId)
+      .with({type: 'message.updated'}, ({properties}) => properties.sessionId)
+  })
+
+  it('passes matched value first and narrowed input second', () => {
+    type OpencodeEvent =
+      | {type: 'session.status'; sessionId: string}
+      | {type: 'message.updated'; properties: {sessionId: string}}
+
+    const getSessionId = match
+      .input<OpencodeEvent>()
+      .case(z.object({type: z.literal('session.status')}), (parsed, input) => {
+        expect(parsed.type).toBe('session.status')
+        return input.sessionId
+      })
+      .case(z.object({type: z.literal('message.updated')}), (parsed, input) => {
+        expect(parsed.type).toBe('message.updated')
+        return input.properties.sessionId
+      })
+      .default('assert')
+
+    expect(getSessionId({type: 'session.status', sessionId: 'abc'})).toBe('abc')
+    expect(getSessionId({type: 'message.updated', properties: {sessionId: 'xyz'}})).toBe('xyz')
+  })
+
+  it('supports .at(key) convenience for discriminated unions', () => {
+    type OpencodeEvent =
+      | {type: 'session.status'; sessionId: string}
+      | {type: 'message.updated'; properties: {sessionId: string}}
+
+    const getSessionId = match
+      .input<OpencodeEvent>()
+      .at('type')
+      .case('session.status', value => value.sessionId)
+      .case('message.updated', value => value.properties.sessionId)
+      .default('assert')
+
+    expect(getSessionId({type: 'session.status', sessionId: 'abc'})).toBe('abc')
+    expect(getSessionId({type: 'message.updated', properties: {sessionId: 'xyz'}})).toBe('xyz')
+  })
 
   it('uses schema output values in handlers', () => {
     const ParseNumber: StandardSchemaV1<unknown, number> = {
@@ -76,7 +131,11 @@ describe('high-level/basic-usage', () => {
     }
 
     const result = match('41')
-      .case(ParseNumber, value => value + 1)
+      .case(ParseNumber, (parsed, input) => {
+        expect(parsed).toBe(41)
+        expect(input).toBe('41')
+        return parsed + 1
+      })
       .default(() => 0)
 
     expect(result).toBe(42)

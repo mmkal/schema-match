@@ -61,10 +61,10 @@ describe('high-level/type-inference', () => {
 
     const matcher = match
       .input<Input>()
-      .case(Ok, (value, input) => {
-        expectTypeOf(value).toEqualTypeOf<{type: 'ok'; value: number}>()
-        expectTypeOf(input).toEqualTypeOf<Input>()
-        return value.value
+      .case(Ok, (parsed, input) => {
+        expectTypeOf(parsed).toEqualTypeOf<{type: 'ok'; value: number}>()
+        expectTypeOf(input).toEqualTypeOf<{type: 'ok'; value: number}>()
+        return parsed.value
       })
       .default(input => {
         expectTypeOf(input).toEqualTypeOf<Input>()
@@ -72,6 +72,49 @@ describe('high-level/type-inference', () => {
       })
 
     expectTypeOf(matcher).toEqualTypeOf<(input: Input) => number>()
+  })
+
+  it('types case args as parsed first and narrowed input second', () => {
+    type Event =
+      | {type: 'session.status'; sessionId: string}
+      | {type: 'message.updated'; properties: {sessionId: string}}
+
+    const matcher = match
+      .input<Event>()
+      .case(z.object({type: z.literal('session.status')}), (parsed, input) => {
+        expectTypeOf(parsed).toEqualTypeOf<{type: 'session.status'}>()
+        expectTypeOf(input).toEqualTypeOf<{type: 'session.status'; sessionId: string}>()
+        return input.sessionId
+      })
+      .case(z.object({type: z.literal('message.updated')}), (parsed, input) => {
+        expectTypeOf(parsed).toEqualTypeOf<{type: 'message.updated'}>()
+        expectTypeOf(input).toEqualTypeOf<{type: 'message.updated'; properties: {sessionId: string}}>()
+        return input.properties.sessionId
+      })
+      .default(() => 'fallback')
+
+    expectTypeOf(matcher).toEqualTypeOf<(input: Event) => string>()
+  })
+
+  it('narrows .at(key).case(value, handler) by discriminator value', () => {
+    type Event =
+      | {type: 'session.status'; sessionId: string}
+      | {type: 'message.updated'; properties: {sessionId: string}}
+
+    const matcher = match
+      .input<Event>()
+      .at('type')
+      .case('session.status', value => {
+        expectTypeOf(value).toEqualTypeOf<{type: 'session.status'; sessionId: string}>()
+        return value.sessionId
+      })
+      .case('message.updated', value => {
+        expectTypeOf(value).toEqualTypeOf<{type: 'message.updated'; properties: {sessionId: string}}>()
+        return value.properties.sessionId
+      })
+      .default('never')
+
+    expectTypeOf(matcher).toEqualTypeOf<(input: Event) => string>()
   })
 
   it('supports constraining output type with .output<T>() on inline match', () => {

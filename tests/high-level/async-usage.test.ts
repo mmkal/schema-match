@@ -38,4 +38,20 @@ describe('high-level/async-usage', () => {
       match(2).case(Number, async () => true, () => 'nope')
     }).toThrow('Guard returned a Promise')
   })
+
+  it('supports .at(key) convenience on async reusable matchers', async () => {
+    type Event =
+      | {type: 'session.status'; sessionId: string}
+      | {type: 'message.updated'; properties: {sessionId: string}}
+
+    const matcher = matchAsync
+      .input<Event>()
+      .at('type')
+      .case('session.status', async value => value.sessionId)
+      .case('message.updated', async value => value.properties.sessionId)
+      .default('assert')
+
+    await expect(matcher({type: 'session.status', sessionId: 'abc'})).resolves.toBe('abc')
+    await expect(matcher({type: 'message.updated', properties: {sessionId: 'xyz'}})).resolves.toBe('xyz')
+  })
 })
