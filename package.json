@@ -1,6 +1,6 @@
 {
   "name": "schematch",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Schema-first pattern matching for TypeScript — use zod, valibot, arktype, or any Standard Schema validator as match/case clauses",
   "type": "module",
   "exports": {
