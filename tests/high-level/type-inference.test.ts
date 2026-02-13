@@ -218,6 +218,19 @@ describe('high-level/type-inference', () => {
       expectTypeOf(result).toEqualTypeOf<number>()
     })
 
+    it('.default<never>(handler) constrains reusable input like .default("never")', () => {
+      const matcher = match
+        .case(z.string(), s => s.length)
+        .case(z.number(), n => n + 1)
+        .default<never>((value, context) => {
+          expectTypeOf(value).toEqualTypeOf<never>()
+          expectTypeOf(context.error).toEqualTypeOf<MatchError>()
+          return -1
+        })
+
+      expectTypeOf(matcher).toEqualTypeOf<(input: string | number) => number>()
+    })
+
     it('.default("never") constrains input type in inline mode', () => {
       // When input matches case union, 'never' is allowed
       const result = match(42 as number)
@@ -309,6 +322,19 @@ describe('high-level/type-inference', () => {
         })
 
       expectTypeOf(result).toEqualTypeOf<Promise<number>>()
+    })
+
+    it('.defaultAsync<never>(handler) constrains reusable input like .defaultAsync("never")', () => {
+      const matcher = match
+        .case(z.string(), s => s.length)
+        .case(z.number(), n => n + 1)
+        .defaultAsync<never>(async (value, context) => {
+          expectTypeOf(value).toEqualTypeOf<never>()
+          expectTypeOf(context.error).toEqualTypeOf<MatchError>()
+          return -1
+        })
+
+      expectTypeOf(matcher).toEqualTypeOf<(input: string | number) => Promise<number>>()
     })
   })
 

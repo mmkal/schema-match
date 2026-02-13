@@ -35,7 +35,7 @@ describe('error message snapshots', () => {
           .default('assert')
       )
       expect(err.message).toMatchInlineSnapshot(`
-        "Schema matching error: no schema matches value 42
+        "Schema matching error: no schema matches input (number)
           Case 1:
             ✖ Invalid input: expected string, received number"
       `)
@@ -48,7 +48,7 @@ describe('error message snapshots', () => {
           .default('assert')
       )
       expect(err.message).toMatchInlineSnapshot(`
-        "Schema matching error: no schema matches value {"name":123}
+        "Schema matching error: no schema matches input (object(keys: name))
           Case 1:
             ✖ Invalid input: expected string, received number → at name"
       `)
@@ -63,7 +63,7 @@ describe('error message snapshots', () => {
           .default('assert')
       )
       expect(err.message).toMatchInlineSnapshot(`
-        "Schema matching error: no schema matches value true
+        "Schema matching error: no schema matches input (boolean)
           Case 1:
             ✖ Invalid input: expected string, received boolean
           Case 2:
@@ -81,7 +81,7 @@ describe('error message snapshots', () => {
           .default('assert')
       )
       expect(err.message).toMatchInlineSnapshot(`
-        "Schema matching error: no schema matches value "hello"
+        "Schema matching error: no schema matches input (string)
           Case 1:
             ✖ Invalid type: Expected number but received "hello"
           Case 2:
@@ -96,7 +96,7 @@ describe('error message snapshots', () => {
           .default('assert')
       )
       expect(err.message).toMatchInlineSnapshot(`
-        "Schema matching error: no schema matches value "hello"
+        "Schema matching error: no schema matches input (string)
           Case 1:
             ✖ must be a number (was a string) → at [0]"
       `)
@@ -112,7 +112,7 @@ describe('error message snapshots', () => {
 
       const err = getError(() => m({type: 'unknown'}))
       expect(err.message).toMatchInlineSnapshot(`
-        "Schema matching error: no schema matches value {"type":"unknown"}
+        "Schema matching error: no schema matches input (object(keys: type))
           Discriminator 'type' has value "unknown" but expected one of: "ok", "err""
       `)
     })
@@ -126,7 +126,7 @@ describe('error message snapshots', () => {
 
       const err = getError(() => m({kind: 'z'}))
       expect(err.message).toMatchInlineSnapshot(`
-        "Schema matching error: no schema matches value {"kind":"z"}
+        "Schema matching error: no schema matches input (object(keys: kind))
           Discriminator 'kind' has value "z" but expected one of: "a", "b", "c""
       `)
     })
@@ -139,7 +139,7 @@ describe('error message snapshots', () => {
 
       const err = getError(() => m({status: 'pending'}))
       expect(err.message).toMatchInlineSnapshot(`
-        "Schema matching error: no schema matches value {"status":"pending"}
+        "Schema matching error: no schema matches input (object(keys: status))
           Discriminator 'status' has value "pending" but expected one of: "active", "inactive""
       `)
     })
@@ -154,7 +154,7 @@ describe('error message snapshots', () => {
 
       const err = getError(() => m({type: 'ok', value: 'not-a-number'}))
       expect(err.message).toMatchInlineSnapshot(`
-        "Schema matching error: no schema matches value {"type":"ok","value":"not-a-number"}
+        "Schema matching error: no schema matches input (object(keys: type, value))
           Discriminator 'type' matched "ok" (options: "ok", "err") but failed validation:
           Case 1:
             ✖ Invalid input: expected number, received string → at value"
@@ -169,7 +169,7 @@ describe('error message snapshots', () => {
 
       const err = getError(() => m({type: 'err'}))
       expect(err.message).toMatchInlineSnapshot(`
-        "Schema matching error: no schema matches value {"type":"err"}
+        "Schema matching error: no schema matches input (object(keys: type))
           Discriminator 'type' matched "err" (options: "ok", "err") but failed validation:
           Case 1:
             ✖ Invalid input: expected string, received undefined → at message"
@@ -186,7 +186,7 @@ describe('error message snapshots', () => {
 
       const err = getError(() => m(true))
       expect(err.message).toMatchInlineSnapshot(`
-        "Schema matching error: no schema matches value true
+        "Schema matching error: no schema matches input (boolean)
           Case 1:
             ✖ Invalid input: expected string, received boolean
           Case 2:
@@ -207,7 +207,7 @@ describe('error message snapshots', () => {
       const err = getError(() => m(circular))
       // Should not throw during error construction, should fall back to String()
       expect(err.message).toMatchInlineSnapshot(`
-        "Schema matching error: no schema matches value [object Object]
+        "Schema matching error: no schema matches input (object(keys: a, self))
           Case 1:
             ✖ Invalid input: expected string, received object"
       `)
@@ -222,7 +222,7 @@ describe('error message snapshots', () => {
           .defaultAsync('assert')
       )
       expect(err.message).toMatchInlineSnapshot(`
-        "Schema matching error: no schema matches value {"type":"unknown"}
+        "Schema matching error: no schema matches input (object(keys: type))
           Case 1:
             ✖ Invalid input: expected "ok" → at type"
       `)
@@ -239,11 +239,11 @@ describe('error message snapshots', () => {
         return 'unexpected'
       })
 
-    const message = routeWebhook({type: 'invoice.refunded'})
+    const message = routeWebhook({type: 'invoice.refunded', id: 1234})
     expect(message).toBe('unexpected')
     expect(log).toHaveBeenCalledOnce()
     expect(log.mock.calls[0][0]).toMatchInlineSnapshot(`
-      "Schema matching error: no schema matches value {"type":"invoice.refunded"}
+      "Schema matching error: no schema matches input (object(keys: type, id))
         Discriminator 'type' has value "invoice.refunded" but expected one of: "invoice.paid", "invoice.payment_failed""
     `)
   })

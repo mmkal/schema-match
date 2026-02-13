@@ -28,7 +28,7 @@ const output = match(input)
   .case(z.string(), s => `hello ${s.slice(1, 3)}`)
   .case(z.array(z.number()), arr => `got ${arr.length} numbers`)
   .default((_value, {error}) => {
-    console.warn(error.message) // "Schema matching error: no schema matches value ...\n  Case 1: ...\n  Case 2: ..."
+    console.warn(error.message) // "Schema matching error: no schema matches input (...)\n  Case 1: ...\n  Case 2: ..."
     return 'unexpected'
   })
 ```
@@ -139,6 +139,21 @@ const fn = match
 fn('hello') // 5
 fn(42)      // 43
 fn(true)    // compile-time type error
+```
+
+You can get the same type behavior with a custom fallback via `.default<never>(...)`:
+
+```typescript
+const fn = match
+  .case(z.string(), s => s.length)
+  .case(z.number(), n => n + 1)
+  .default<never>((value, {error}) => {
+    value satisfies never
+    console.warn(error.message)
+    return -1
+  })
+
+// fn has type: (input: string | number) => number
 ```
 
 For inline matchers, `'never'` produces a compile-time error if the input value doesn't extend the case union:

@@ -30,6 +30,21 @@ export class MatchError extends Error implements StandardSchemaV1.FailureResult 
     this.schemas = options?.schemas
     this.discriminator = options?.discriminator
   }
+
+  static summarizeInput(input: unknown): string {
+    if (input === null) return 'null'
+  
+    const kind = typeof input
+    if (kind !== 'object') return kind
+  
+    if (Array.isArray(input)) return `array(length: ${input.length})`
+  
+    const keys = Object.keys(input as Record<string, unknown>)
+    if (keys.length === 0) return 'object'
+    const preview = keys.slice(0, 5).join(', ')
+    const suffix = keys.length > 5 ? ', ...' : ''
+    return `object(keys: ${preview}${suffix})`
+  }
 }
 
 type FailureAnalysis = {
@@ -89,7 +104,7 @@ function analyzeFailure(input: unknown, options?: MatchErrorOptions): FailureAna
 }
 
 function formatNoMatchMessage(input: unknown): string {
-  return `No schema matches value ${displayValue(input)}`
+  return `No schema matches input (${MatchError.summarizeInput(input)})`
 }
 
 function buildErrorMessage(
@@ -97,7 +112,7 @@ function buildErrorMessage(
   analysis: FailureAnalysis,
   options?: MatchErrorOptions,
 ): string {
-  const lines: string[] = [`Schema matching error: no schema matches value ${displayValue(input)}`]
+  const lines: string[] = [`Schema matching error: no schema matches input (${MatchError.summarizeInput(input)})`]
 
   const disc = options?.discriminator
   if (disc) {

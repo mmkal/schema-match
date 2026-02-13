@@ -392,7 +392,8 @@ describe('edge cases', () => {
       } catch (e) {
         expect(e).toBeInstanceOf(MatchError)
         const err = e as MatchError
-        expect(err.message).toContain('unknown')
+        expect(err.message).toContain('no schema matches input')
+        expect(err.message).toContain('object(keys: type)')
         expect(err.message).toContain('Case 1')
       }
     })
@@ -444,7 +445,7 @@ describe('edge cases', () => {
       } catch (e) {
         expect(e).toBeInstanceOf(MatchError)
         const err = e as MatchError
-        expect(err.message).toContain('not a number')
+        expect(err.message).toContain('expected number, received string')
         expect(err.message).toContain('Case 1')
         // Should only show issues from the matched discriminator branch (OkSchema),
         // not from ErrSchema
